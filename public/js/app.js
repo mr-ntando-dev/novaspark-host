@@ -58,8 +58,8 @@ async function handleSignup(e) {
 function logout() { token = null; refreshToken = null; currentUser = null; localStorage.removeItem('ns_token'); localStorage.removeItem('ns_refresh'); if (ws) ws.close(); showAuth(); }
 function showAuth() { document.getElementById('auth-modal').classList.remove('hidden'); }
 function hideAuth() { document.getElementById('auth-modal').classList.add('hidden'); }
-function showSignup() { document.getElementById('login-form').classList.add('hidden'); document.getElementById('signup-form').classList.remove('hidden'); document.getElementById('signup-toggle').classList.remove('hidden'); document.querySelector('#auth-modal .mt-6').classList.add('hidden'); }
-function showLogin() { document.getElementById('login-form').classList.remove('hidden'); document.getElementById('signup-form').classList.add('hidden'); document.getElementById('signup-toggle').classList.add('hidden'); document.querySelector('#auth-modal .mt-6').classList.remove('hidden'); }
+function showSignup() { document.getElementById('login-form').classList.add('hidden'); document.getElementById('signup-form').classList.remove('hidden'); document.getElementById('signup-toggle').classList.remove('hidden'); document.getElementById('login-toggle').classList.add('hidden'); }
+function showLogin() { document.getElementById('login-form').classList.remove('hidden'); document.getElementById('signup-form').classList.add('hidden'); document.getElementById('signup-toggle').classList.add('hidden'); document.getElementById('login-toggle').classList.remove('hidden'); }
 function showError(id, msg) { const el = document.getElementById(id); el.textContent = msg; el.classList.remove('hidden'); setTimeout(() => el.classList.add('hidden'), 5000); }
 
 // ─── WEBSOCKET ───────────────────────────────────────────────────────────────
@@ -98,6 +98,7 @@ function navigate(page) {
     case 'admin-users': renderAdminUsers(); break;
     case 'admin-system': renderAdminSystem(); break;
     case 'admin-codes': renderAdminCodes(); break;
+    case 'admin-install-bot': renderAdminInstallBot(); break;
     default: renderDashboard();
   }
 }
@@ -281,6 +282,41 @@ async function renderAdminUsers() {
   } catch(e) { toast(e.message,'error'); }
 }
 
+async function adminEditUser(userId) {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="space-y-6"><div class="flex items-center gap-3"><button onclick="navigate('admin-users')" class="text-gray-400 hover:text-white"><i class="ri-arrow-left-line text-xl"></i></button><h2 class="text-2xl font-bold text-white">Edit User</h2></div><div id="admin-edit-form" class="glass rounded-xl p-6"><p class="text-gray-400">Loading...</p></div></div>`;
+  try {
+    const data = await api(`/api/admin/users`);
+    const user = data.users.find(u => u.id === userId);
+    if (!user) { toast('User not found','error'); navigate('admin-users'); return; }
+    document.getElementById('admin-edit-form').innerHTML = `
+      <div class="flex items-center gap-4 mb-6"><div class="w-12 h-12 rounded-full bg-brand-500/20 flex items-center justify-center text-2xl">${user.avatar_emoji||'🤖'}</div><div><h3 class="text-lg font-bold text-white">${user.username}</h3><p class="text-sm text-gray-400">${user.email||'No email'}</p></div></div>
+      <form onsubmit="saveAdminUser(event,'${userId}')" class="space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="text-sm text-gray-400 block mb-1">Role</label><select id="ae-role" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none"><option value="user" ${user.role==='user'?'selected':''}>User</option><option value="admin" ${user.role==='admin'?'selected':''}>Admin</option></select></div>
+          <div><label class="text-sm text-gray-400 block mb-1">Plan</label><select id="ae-plan" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none"><option value="free" ${user.plan==='free'?'selected':''}>Free</option><option value="starter" ${user.plan==='starter'?'selected':''}>Starter</option><option value="basic" ${user.plan==='basic'?'selected':''}>Basic</option><option value="pro" ${user.plan==='pro'?'selected':''}>Pro</option><option value="business" ${user.plan==='business'?'selected':''}>Business</option><option value="enterprise" ${user.plan==='enterprise'?'selected':''}>Enterprise</option></select></div>
+        </div>
+        <div><label class="text-sm text-gray-400 block mb-1">Coins</label><input type="number" id="ae-coins" value="${user.coins||0}" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none"></div>
+        <div class="flex items-center gap-3"><input type="checkbox" id="ae-banned" ${user.is_banned?'checked':''}><label for="ae-banned" class="text-sm text-gray-300">Banned</label></div>
+        <button type="submit" class="bg-brand-500 hover:bg-brand-600 text-white px-6 py-2 rounded-lg transition">Save Changes</button>
+      </form>`;
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function saveAdminUser(e, userId) {
+  e.preventDefault();
+  try {
+    await api(`/api/admin/users/${userId}`, { method: 'PUT', body: {
+      role: document.getElementById('ae-role').value,
+      plan: document.getElementById('ae-plan').value,
+      coins: parseInt(document.getElementById('ae-coins').value) || 0,
+      is_banned: document.getElementById('ae-banned').checked ? 1 : 0
+    }});
+    toast('User updated','success');
+    navigate('admin-users');
+  } catch(e) { toast(e.message,'error'); }
+}
+
 async function renderAdminSystem() {
   const el = document.getElementById('page-content');
   el.innerHTML = `<div class="space-y-6"><h2 class="text-2xl font-bold text-white">Admin: System</h2><div id="sys-stats" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"></div><div class="glass rounded-xl p-6"><h3 class="font-semibold text-white mb-3">Broadcast Notification</h3><form onsubmit="sendBroadcast(event)" class="space-y-3"><input type="text" id="bc-title" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-brand-500 focus:outline-none" placeholder="Title" required><input type="text" id="bc-msg" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-brand-500 focus:outline-none" placeholder="Message" required><button type="submit" class="bg-brand-500 text-white px-6 py-2 rounded-lg">Send to All</button></form></div></div>`;
@@ -297,6 +333,91 @@ async function renderAdminCodes() {
 
 async function createCode(e) { e.preventDefault(); try { await api('/api/admin/codes', { method: 'POST', body: { custom_code: document.getElementById('cc-code').value||undefined, value: parseInt(document.getElementById('cc-value').value), max_uses: parseInt(document.getElementById('cc-uses').value)||1 } }); toast('Code created','success'); renderAdminCodes(); } catch(e) { toast(e.message,'error'); } }
 async function sendBroadcast(e) { e.preventDefault(); try { const d = await api('/api/admin/broadcast', { method: 'POST', body: { title: document.getElementById('bc-title').value, message: document.getElementById('bc-msg').value } }); toast(`Sent to ${d.recipients} users`,'success'); } catch(e) { toast(e.message,'error'); } }
+
+// ─── ADMIN: INSTALL BOT ──────────────────────────────────────────────────────
+function renderAdminInstallBot() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="space-y-6"><h2 class="text-2xl font-bold text-white">Admin: Install Bot</h2>
+    <div class="glass rounded-xl p-6">
+      <div class="flex items-center gap-4 mb-6">
+        <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-brand-500 to-purple-500 flex items-center justify-center">
+          <i class="ri-robot-2-line text-white text-2xl"></i>
+        </div>
+        <div>
+          <h3 class="text-xl font-bold text-white">NovaSpark Bot</h3>
+          <p class="text-sm text-gray-400">WhatsApp MD AutoChat Bot with 130+ commands</p>
+        </div>
+      </div>
+      <p class="text-gray-300 text-sm mb-4">Deploy the official NovaSpark WhatsApp Bot directly from GitHub. Features include AI chat, stickers, TTS, news, trivia, XP system, coin economy, slow mode, anti-media, and much more.</p>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div class="bg-white/5 rounded-lg p-3 text-center"><p class="text-brand-400 font-bold text-lg">130+</p><p class="text-xs text-gray-400">Commands</p></div>
+        <div class="bg-white/5 rounded-lg p-3 text-center"><p class="text-green-400 font-bold text-lg">v9.0</p><p class="text-xs text-gray-400">Version</p></div>
+        <div class="bg-white/5 rounded-lg p-3 text-center"><p class="text-purple-400 font-bold text-lg">Node 20+</p><p class="text-xs text-gray-400">Runtime</p></div>
+        <div class="bg-white/5 rounded-lg p-3 text-center"><p class="text-yellow-400 font-bold text-lg">Baileys</p><p class="text-xs text-gray-400">Engine</p></div>
+      </div>
+      <div class="border-t border-white/5 pt-4">
+        <h4 class="text-sm font-semibold text-white mb-3">Deploy Configuration</h4>
+        <form onsubmit="handleInstallNovaSpark(event)" class="space-y-4">
+          <div><label class="text-sm text-gray-400 block mb-1">Bot Name</label><input type="text" id="install-name" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="NovaSpark Bot" required></div>
+          <div><label class="text-sm text-gray-400 block mb-1">Description</label><input type="text" id="install-desc" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="WhatsApp MD AutoChat Bot - 130+ commands, AI, games, economy"></div>
+          <div class="grid grid-cols-2 gap-4">
+            <div><label class="text-sm text-gray-400 block mb-1">Branch</label><input type="text" id="install-branch" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="main"></div>
+            <div><label class="text-sm text-gray-400 block mb-1">Entry Point</label><input type="text" id="install-entry" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="index.js"></div>
+          </div>
+          <div class="bg-white/5 rounded-lg p-3 flex items-center gap-3">
+            <i class="ri-github-fill text-xl text-gray-300"></i>
+            <div class="flex-1">
+              <p class="text-sm text-white font-mono">mr-ntando-dev/NovaSpark-Bot</p>
+              <p class="text-xs text-gray-400">https://github.com/mr-ntando-dev/NovaSpark-Bot</p>
+            </div>
+          </div>
+          <button type="submit" id="install-btn" class="w-full bg-gradient-to-r from-brand-500 to-purple-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition flex items-center justify-center gap-2"><i class="ri-install-line"></i> Install & Deploy NovaSpark Bot</button>
+        </form>
+      </div>
+    </div>
+    <div class="glass rounded-xl p-6">
+      <h3 class="font-semibold text-white mb-3">Features</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-300">
+        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> AI Chat & Smart Detection</div>
+        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> Sticker Creation (image/video)</div>
+        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> Text-to-Speech (TTS)</div>
+        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> News & RSS Feeds</div>
+        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> Trivia, Wordle, Hangman</div>
+        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> XP & Level System</div>
+        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> Coin Economy</div>
+        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> Night Mode & Anti-Toxic</div>
+        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> Ghost Mode & VIP Mode</div>
+        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> TikTok & YouTube Downloads</div>
+        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> Chess & Akinator Games</div>
+        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> Pin Board & Timetable</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function handleInstallNovaSpark(e) {
+  e.preventDefault();
+  const btn = document.getElementById('install-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ri-loader-4-line animate-spin"></i> Installing...';
+  try {
+    const body = {
+      name: document.getElementById('install-name').value,
+      description: document.getElementById('install-desc').value,
+      repo_url: 'https://github.com/mr-ntando-dev/NovaSpark-Bot',
+      branch: document.getElementById('install-branch').value || 'main',
+      entry_point: document.getElementById('install-entry').value || 'index.js'
+    };
+    const data = await api('/api/bots', { method: 'POST', body });
+    await api(`/api/bots/${data.bot.id}/deploy`, { method: 'POST' });
+    toast('NovaSpark Bot installed and deployed!', 'success');
+    setTimeout(() => navigate('bots'), 1000);
+  } catch(err) {
+    toast(err.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ri-install-line"></i> Install & Deploy NovaSpark Bot';
+  }
+}
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
 function toast(msg, type='info') { const c = document.getElementById('toast-container'); const colors = { success:'bg-green-500/90', error:'bg-red-500/90', info:'bg-brand-500/90' }; const t = document.createElement('div'); t.className = `${colors[type]||colors.info} text-white px-5 py-3 rounded-lg shadow-lg text-sm backdrop-blur-sm fade-in`; t.textContent = msg; c.appendChild(t); setTimeout(()=>t.remove(), 4000); }
