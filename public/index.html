@@ -71,32 +71,32 @@
 
       <!-- Nav -->
       <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
-        <a href="javascript:void(0)" onclick="navigate('dashboard')" class="sidebar-link active flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="dashboard">
+        <a href="#" onclick="event.preventDefault(); navigate('dashboard')" class="sidebar-link active flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="dashboard">
           <i class="ri-dashboard-3-line text-lg"></i> Dashboard
         </a>
-        <a href="javascript:void(0)" onclick="navigate('bots')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="bots">
+        <a href="#" onclick="event.preventDefault(); navigate('bots')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="bots">
           <i class="ri-robot-2-line text-lg"></i> My Bots
         </a>
-        <a href="javascript:void(0)" onclick="navigate('deploy')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="deploy">
+        <a href="#" onclick="event.preventDefault(); navigate('deploy')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="deploy">
           <i class="ri-rocket-2-line text-lg"></i> Deploy
         </a>
-        <a href="javascript:void(0)" onclick="navigate('economy')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="economy">
+        <a href="#" onclick="event.preventDefault(); navigate('economy')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="economy">
           <i class="ri-coin-line text-lg"></i> Economy
         </a>
-        <a href="javascript:void(0)" onclick="navigate('leaderboard')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="leaderboard">
+        <a href="#" onclick="event.preventDefault(); navigate('leaderboard')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="leaderboard">
           <i class="ri-trophy-line text-lg"></i> Leaderboard
         </a>
-        <a href="javascript:void(0)" onclick="navigate('notifications')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="notifications">
+        <a href="#" onclick="event.preventDefault(); navigate('notifications')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="notifications">
           <i class="ri-notification-3-line text-lg"></i> Notifications
           <span id="notif-badge" class="hidden ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full"></span>
         </a>
 
         <div class="pt-4 mt-4 border-t border-white/5">
           <p class="text-xs text-gray-500 px-4 mb-2 uppercase tracking-wider">Account</p>
-          <a href="javascript:void(0)" onclick="navigate('profile')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="profile">
+          <a href="#" onclick="event.preventDefault(); navigate('profile')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="profile">
             <i class="ri-user-3-line text-lg"></i> Profile
           </a>
-          <a href="javascript:void(0)" onclick="navigate('settings')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="settings">
+          <a href="#" onclick="event.preventDefault(); navigate('settings')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="settings">
             <i class="ri-settings-4-line text-lg"></i> Settings
           </a>
         </div>
@@ -104,16 +104,16 @@
         <!-- Admin section (hidden for non-admins) -->
         <div id="admin-nav" class="hidden pt-4 mt-4 border-t border-white/5">
           <p class="text-xs text-gray-500 px-4 mb-2 uppercase tracking-wider">Admin</p>
-          <a href="javascript:void(0)" onclick="navigate('admin-users')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="admin-users">
+          <a href="#" onclick="event.preventDefault(); navigate('admin-users')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="admin-users">
             <i class="ri-group-line text-lg"></i> Users
           </a>
-          <a href="javascript:void(0)" onclick="navigate('admin-system')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="admin-system">
+          <a href="#" onclick="event.preventDefault(); navigate('admin-system')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="admin-system">
             <i class="ri-server-line text-lg"></i> System
           </a>
-          <a href="javascript:void(0)" onclick="navigate('admin-codes')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="admin-codes">
+          <a href="#" onclick="event.preventDefault(); navigate('admin-codes')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="admin-codes">
             <i class="ri-coupon-3-line text-lg"></i> Codes
           </a>
-          <a href="javascript:void(0)" onclick="navigate('admin-install-bot')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="admin-install-bot">
+          <a href="#" onclick="event.preventDefault(); navigate('admin-install-bot')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="admin-install-bot">
             <i class="ri-install-line text-lg"></i> Install Bot
           </a>
         </div>
@@ -187,7 +187,7 @@
       <div id="login-toggle" class="mt-6 text-center">
         <p class="text-gray-400 text-sm">
           Don't have an account?
-          <a href="javascript:void(0)" onclick="showSignup()" class="text-brand-400 hover:text-brand-300">Sign up</a>
+          <a href="#" onclick="event.preventDefault(); showSignup()" class="text-brand-400 hover:text-brand-300">Sign up</a>
         </p>
       </div>
 
@@ -218,7 +218,7 @@
       <div id="signup-toggle" class="hidden mt-6 text-center">
         <p class="text-gray-400 text-sm">
           Already have an account?
-          <a href="javascript:void(0)" onclick="showLogin()" class="text-brand-400 hover:text-brand-300">Sign in</a>
+          <a href="#" onclick="event.preventDefault(); showLogin()" class="text-brand-400 hover:text-brand-300">Sign in</a>
         </p>
       </div>
     </div>
