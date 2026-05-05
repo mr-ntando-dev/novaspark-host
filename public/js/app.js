@@ -323,4 +323,12 @@ async function init() {
   } catch(e) { showAuth(); }
 }
 
+// Attach form listeners after DOM is ready (belt-and-suspenders for onsubmit)
+document.addEventListener('DOMContentLoaded', () => {
+  const loginForm = document.getElementById('login-form');
+  const signupForm = document.getElementById('signup-form');
+  if (loginForm) loginForm.addEventListener('submit', (e) => { e.preventDefault(); handleLogin(e); });
+  if (signupForm) signupForm.addEventListener('submit', (e) => { e.preventDefault(); handleSignup(e); });
+});
+
 init();

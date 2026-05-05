@@ -162,7 +162,7 @@
       </div>
 
       <!-- Login form -->
-      <form id="login-form" class="space-y-4" onsubmit="handleLogin(event)">
+      <form id="login-form" class="space-y-4" onsubmit="event.preventDefault(); handleLogin(event); return false;">
         <div>
           <label class="text-sm text-gray-400 mb-1 block">Username</label>
           <input type="text" id="login-username" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none transition" placeholder="Enter username" required>
@@ -189,7 +189,7 @@
       </div>
 
       <!-- Signup form (hidden) -->
-      <form id="signup-form" class="space-y-4 hidden" onsubmit="handleSignup(event)">
+      <form id="signup-form" class="space-y-4 hidden" onsubmit="event.preventDefault(); handleSignup(event); return false;">
         <div>
           <label class="text-sm text-gray-400 mb-1 block">Username</label>
           <input type="text" id="signup-username" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none transition" placeholder="Choose a username" required minlength="3" maxlength="20">
