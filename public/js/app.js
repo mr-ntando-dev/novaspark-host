@@ -533,5 +533,11 @@ async function init() {
 
 // Wait for DOM before calling init so auth modal elements exist
 document.addEventListener('DOMContentLoaded', () => {
+  // Bind login/signup forms here — NOT via inline onsubmit in HTML
+  // Using addEventListener ensures e.preventDefault() blocks the native form submit reliably
+  const loginForm = document.getElementById('login-form');
+  const signupForm = document.getElementById('signup-form');
+  if (loginForm) loginForm.addEventListener('submit', handleLogin);
+  if (signupForm) signupForm.addEventListener('submit', handleSignup);
   init();
 });
