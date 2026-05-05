@@ -173,7 +173,7 @@ async function renderDashboard() {
     if (botsData.bots.length === 0) { botsEl.innerHTML = '<p class="text-gray-500">No bots yet. Deploy your first bot!</p>'; return; }
     botsEl.innerHTML = botsData.bots.map(b => `<div class="flex items-center justify-between bg-white/5 rounded-lg px-4 py-3">
       <div class="flex items-center gap-3"><div class="status-dot status-${b.status}"></div><span class="font-medium text-white">${b.name}</span><span class="text-xs text-gray-500">${b.status}</span></div>
-      <div class="flex gap-2">${b.status==='running'?`<button onclick="botAction('${b.id}','stop')" class="text-xs bg-red-500/20 text-red-400 px-3 py-1 rounded hover:bg-red-500/30 transition">Stop</button>`:`<button onclick="botAction('${b.id}','start')" class="text-xs bg-green-500/20 text-green-400 px-3 py-1 rounded hover:bg-green-500/30 transition">Start</button>`}</div>
+      <div class="flex gap-2">${b.status==='running'?`<button onclick="botAction('${b.id}','stop')" class="text-xs bg-red-500/20 text-red-400 px-3 py-1 rounded hover:bg-red-500/30 transition">Stop</button>`:`<button onclick="botAction('${b.id}','start')" class="text-xs bg-green-500/20 text-green-400 px-3 py-1 rounded hover:bg-green-500/30 transition">Start</button>`}<button onclick="manageEnv('${b.id}')" class="text-xs bg-yellow-500/10 text-yellow-400 px-3 py-1 rounded hover:bg-yellow-500/20 transition"><i class="ri-key-2-line"></i></button></div>
     </div>`).join('');
   } catch(e) { console.error(e); }
 }
@@ -192,6 +192,7 @@ async function renderBots() {
       <div class="flex items-center justify-between"><div class="flex gap-2 text-xs text-gray-500"><span><i class="ri-time-line"></i> ${b.status==='running'?formatUptime(b.uptime_seconds):'Offline'}</span><span><i class="ri-restart-line"></i> ${b.total_restarts||0} restarts</span></div>
       <div class="flex gap-2">${b.status==='running'?`<button onclick="botAction('${b.id}','restart')" class="text-xs bg-yellow-500/20 text-yellow-400 px-3 py-1.5 rounded hover:bg-yellow-500/30 transition">Restart</button><button onclick="botAction('${b.id}','stop')" class="text-xs bg-red-500/20 text-red-400 px-3 py-1.5 rounded hover:bg-red-500/30 transition">Stop</button>`:`<button onclick="botAction('${b.id}','start')" class="text-xs bg-green-500/20 text-green-400 px-3 py-1.5 rounded hover:bg-green-500/30 transition">Start</button>`}
       <button onclick="viewLogs('${b.id}')" class="text-xs bg-white/5 text-gray-300 px-3 py-1.5 rounded hover:bg-white/10 transition">Logs</button>
+      <button onclick="manageEnv('${b.id}')" class="text-xs bg-yellow-500/10 text-yellow-400 px-3 py-1.5 rounded hover:bg-yellow-500/20 transition"><i class="ri-key-2-line"></i> Env</button>
       <button onclick="deleteBot('${b.id}')" class="text-xs bg-red-500/10 text-red-400 px-3 py-1.5 rounded hover:bg-red-500/20 transition"><i class="ri-delete-bin-line"></i></button></div></div>
     </div>`).join('');
   } catch(e) { toast(e.message, 'error'); }
@@ -202,6 +203,67 @@ async function botAction(id, action) {
 }
 
 async function deleteBot(id) { if (!confirm('Delete this bot? This cannot be undone.')) return; try { await api(`/api/bots/${id}`, { method: 'DELETE' }); toast('Bot deleted', 'success'); renderBots(); } catch(e) { toast(e.message, 'error'); } }
+
+async function manageEnv(botId) {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="space-y-6">
+    <div class="flex items-center gap-3">
+      <button onclick="navigate('bots')" class="text-gray-400 hover:text-white transition"><i class="ri-arrow-left-line text-xl"></i></button>
+      <h2 class="text-2xl font-bold text-white">Environment Variables</h2>
+    </div>
+    <div class="glass rounded-xl p-6 max-w-2xl space-y-4">
+      <p class="text-sm text-gray-400"><i class="ri-information-line"></i> These variables are injected into your bot's process at startup. Changes take effect on next restart.</p>
+      <div id="env-manage-rows" class="space-y-2"><p class="text-gray-500 text-sm">Loading...</p></div>
+      <button type="button" onclick="addEnvManageRow()" class="text-sm text-brand-400 hover:text-brand-300 flex items-center gap-1"><i class="ri-add-line"></i> Add Variable</button>
+      <div class="pt-2 border-t border-white/5 flex gap-3">
+        <button onclick="saveEnv('${botId}')" class="bg-brand-500 hover:bg-brand-600 text-white px-6 py-2 rounded-lg text-sm transition">Save &amp; Restart</button>
+        <button onclick="navigate('bots')" class="bg-white/5 hover:bg-white/10 text-gray-300 px-6 py-2 rounded-lg text-sm transition">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+  try {
+    // Fetch real (unmasked) env vars — use the PUT endpoint trick: we read what the user already saved
+    // We only have a masked GET, so we load masked values as placeholders
+    const data = await api(`/api/bots/${botId}/env`);
+    const rows = document.getElementById('env-manage-rows');
+    rows.innerHTML = '';
+    const entries = Object.entries(data.env_vars || {});
+    if (entries.length === 0) {
+      rows.innerHTML = '<p class="text-gray-500 text-sm">No variables set yet.</p>';
+    } else {
+      entries.forEach(([k, v]) => addEnvManageRow(k, v));
+    }
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function addEnvManageRow(key = '', value = '') {
+  const container = document.getElementById('env-manage-rows');
+  // Remove the "no variables" placeholder if present
+  const placeholder = container.querySelector('p');
+  if (placeholder) placeholder.remove();
+  const row = document.createElement('div');
+  row.className = 'env-manage-row flex gap-2 items-center';
+  row.innerHTML = `<input type="text" placeholder="KEY" class="env-manage-key w-2/5 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 focus:outline-none" value="${escapeHtml(key)}">
+    <input type="text" placeholder="new value (leave blank to keep existing)" class="env-manage-val flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 focus:outline-none" value="">
+    <button type="button" onclick="this.closest('.env-manage-row').remove()" class="text-gray-500 hover:text-red-400 transition px-1"><i class="ri-close-line text-lg"></i></button>`;
+  container.appendChild(row);
+}
+
+async function saveEnv(botId) {
+  const env = {};
+  document.querySelectorAll('.env-manage-row').forEach(row => {
+    const k = row.querySelector('.env-manage-key').value.trim().toUpperCase();
+    const v = row.querySelector('.env-manage-val').value;
+    if (k) env[k] = v;
+  });
+  try {
+    await api(`/api/bots/${botId}/env`, { method: 'PUT', body: { env_vars: env } });
+    // Restart so new vars take effect
+    await api(`/api/bots/${botId}/restart`, { method: 'POST' }).catch(() => {});
+    toast('Environment variables saved. Bot restarting...', 'success');
+    setTimeout(() => navigate('bots'), 1000);
+  } catch(e) { toast(e.message, 'error'); }
+}
 
 async function viewLogs(id) {
   const el = document.getElementById('page-content');
@@ -222,13 +284,51 @@ function renderDeploy() {
         <div><label class="text-sm text-gray-400 block mb-1">Branch</label><input type="text" id="d-branch" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="main"></div>
         <div><label class="text-sm text-gray-400 block mb-1">Entry Point</label><input type="text" id="d-entry" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="index.js"></div>
       </div>
+
+      <!-- Environment Variables -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-sm text-gray-400">Environment Variables</label>
+          <button type="button" onclick="addEnvRow()" class="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"><i class="ri-add-line"></i> Add Variable</button>
+        </div>
+        <div id="env-rows" class="space-y-2"></div>
+        <p class="text-xs text-gray-500 mt-2"><i class="ri-lock-line"></i> Values are encrypted at rest and injected securely at runtime.</p>
+      </div>
+
       <button type="submit" class="w-full bg-gradient-to-r from-brand-500 to-purple-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition"><i class="ri-rocket-2-line"></i> Deploy Bot</button>
     </form></div>`;
 }
 
+function addEnvRow(key = '', value = '') {
+  const container = document.getElementById('env-rows');
+  const row = document.createElement('div');
+  row.className = 'env-row flex gap-2 items-center';
+  row.innerHTML = `<input type="text" placeholder="KEY" class="env-key w-2/5 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 focus:outline-none uppercase" value="${escapeHtml(key)}">
+    <input type="text" placeholder="value" class="env-val flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 focus:outline-none" value="${escapeHtml(value)}">
+    <button type="button" onclick="this.closest('.env-row').remove()" class="text-gray-500 hover:text-red-400 transition px-1"><i class="ri-close-line text-lg"></i></button>`;
+  container.appendChild(row);
+}
+
+function collectEnvVars() {
+  const env = {};
+  document.querySelectorAll('#env-rows .env-row').forEach(row => {
+    const k = row.querySelector('.env-key').value.trim().toUpperCase();
+    const v = row.querySelector('.env-val').value;
+    if (k) env[k] = v;
+  });
+  return env;
+}
+
 async function handleDeploy(e) {
   if (e && e.preventDefault) e.preventDefault();
-  const body = { name: document.getElementById('d-name').value, description: document.getElementById('d-desc').value, repo_url: document.getElementById('d-repo').value, branch: document.getElementById('d-branch').value, entry_point: document.getElementById('d-entry').value };
+  const body = {
+    name: document.getElementById('d-name').value,
+    description: document.getElementById('d-desc').value,
+    repo_url: document.getElementById('d-repo').value,
+    branch: document.getElementById('d-branch').value,
+    entry_point: document.getElementById('d-entry').value,
+    env_vars: collectEnvVars()
+  };
   try { const data = await api('/api/bots', { method: 'POST', body }); await api(`/api/bots/${data.bot.id}/deploy`, { method: 'POST' }); toast('Bot deployed!', 'success'); navigate('bots'); } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -409,6 +509,16 @@ function renderAdminInstallBot() {
               <p class="text-xs text-gray-400">https://github.com/mr-ntando-dev/NovaSpark-Bot</p>
             </div>
           </div>
+          <div class="border-t border-white/5 pt-4">
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-sm text-gray-400">Environment Variables</label>
+              <button type="button" onclick="addInstallEnvRow()" class="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"><i class="ri-add-line"></i> Add Variable</button>
+            </div>
+            <div id="install-env-rows" class="space-y-2">
+              <!-- Prefill common NovaSpark bot vars -->
+            </div>
+            <p class="text-xs text-gray-500 mt-2"><i class="ri-lock-line"></i> Injected securely at runtime — never exposed in logs.</p>
+          </div>
           <button type="submit" id="install-btn" class="w-full bg-gradient-to-r from-brand-500 to-purple-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition flex items-center justify-center gap-2"><i class="ri-install-line"></i> Install & Deploy NovaSpark Bot</button>
         </form>
       </div>
@@ -433,6 +543,26 @@ function renderAdminInstallBot() {
   </div>`;
 }
 
+function addInstallEnvRow(key = '', value = '') {
+  const container = document.getElementById('install-env-rows');
+  const row = document.createElement('div');
+  row.className = 'install-env-row flex gap-2 items-center';
+  row.innerHTML = `<input type="text" placeholder="KEY" class="install-env-key w-2/5 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 focus:outline-none uppercase" value="${escapeHtml(key)}">
+    <input type="text" placeholder="value" class="install-env-val flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 focus:outline-none" value="${escapeHtml(value)}">
+    <button type="button" onclick="this.closest('.install-env-row').remove()" class="text-gray-500 hover:text-red-400 transition px-1"><i class="ri-close-line text-lg"></i></button>`;
+  container.appendChild(row);
+}
+
+function collectInstallEnvVars() {
+  const env = {};
+  document.querySelectorAll('.install-env-row').forEach(row => {
+    const k = row.querySelector('.install-env-key').value.trim().toUpperCase();
+    const v = row.querySelector('.install-env-val').value;
+    if (k) env[k] = v;
+  });
+  return env;
+}
+
 async function handleInstallNovaSpark(e) {
   if (e && e.preventDefault) e.preventDefault();
   const btn = document.getElementById('install-btn');
@@ -444,7 +574,8 @@ async function handleInstallNovaSpark(e) {
       description: document.getElementById('install-desc').value,
       repo_url: 'https://github.com/mr-ntando-dev/NovaSpark-Bot',
       branch: document.getElementById('install-branch').value || 'main',
-      entry_point: document.getElementById('install-entry').value || 'index.js'
+      entry_point: document.getElementById('install-entry').value || 'index.js',
+      env_vars: collectInstallEnvVars()
     };
     const data = await api('/api/bots', { method: 'POST', body });
     await api(`/api/bots/${data.bot.id}/deploy`, { method: 'POST' });
