@@ -23,6 +23,7 @@ const botRoutes = require('./src/routes/bots');
 const economyRoutes = require('./src/routes/economy');
 const adminRoutes = require('./src/routes/admin');
 const notificationRoutes = require('./src/routes/notifications');
+const repoConfigRoutes = require('./src/routes/repo-config');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -60,16 +61,28 @@ app.use('/api/bots', botRoutes);
 app.use('/api/economy', economyRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/repo-config', repoConfigRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
   const running = getRunningBots();
   res.json({
     status: 'ok',
-    version: '11.0.0',
+    version: '11.1.0',
     uptime: process.uptime(),
     running_bots: running.length,
     timestamp: new Date().toISOString()
+  });
+});
+
+// ─── GLOBAL ERROR HANDLER (prevents server crash on unhandled route errors) ──
+app.use((err, req, res, _next) => {
+  console.error('[Express Error]', err.stack || err.message || err);
+  if (res.headersSent) return;
+  res.status(err.status || 500).json({
+    error: process.env.NODE_ENV === 'production'
+      ? 'Internal server error'
+      : err.message || 'Internal server error'
   });
 });
 

@@ -274,12 +274,20 @@ async function viewLogs(id) {
 async function clearLogs(id) { try { await api(`/api/bots/${id}/logs`, { method: 'DELETE' }); toast('Logs cleared','success'); viewLogs(id); } catch(e) { toast(e.message,'error'); } }
 
 // ─── DEPLOY ──────────────────────────────────────────────────────────────────
+let _deployRepoTimeout = null;
+
 function renderDeploy() {
   document.getElementById('page-content').innerHTML = `<div class="space-y-6"><h2 class="text-2xl font-bold text-white">Deploy a Bot</h2>
-    <form onsubmit="handleDeploy(event)" class="glass rounded-xl p-6 space-y-5 max-w-xl">
+    <form id="deploy-form" class="glass rounded-xl p-6 space-y-5 max-w-2xl">
+      <div><label class="text-sm text-gray-400 block mb-1">GitHub Repo URL *</label>
+        <div class="relative">
+          <input type="url" id="d-repo" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none pr-10" placeholder="https://github.com/user/repo" required>
+          <div id="repo-scan-indicator" class="hidden absolute right-3 top-1/2 -translate-y-1/2"><i class="ri-loader-4-line animate-spin text-brand-400"></i></div>
+        </div>
+        <p id="repo-scan-status" class="text-xs text-gray-500 mt-1"><i class="ri-magic-line"></i> Paste a GitHub URL — we'll auto-detect your bot's config.</p>
+      </div>
       <div><label class="text-sm text-gray-400 block mb-1">Bot Name *</label><input type="text" id="d-name" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" placeholder="My Awesome Bot" required></div>
       <div><label class="text-sm text-gray-400 block mb-1">Description</label><input type="text" id="d-desc" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" placeholder="What does your bot do?"></div>
-      <div><label class="text-sm text-gray-400 block mb-1">GitHub Repo URL *</label><input type="url" id="d-repo" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" placeholder="https://github.com/user/repo" required></div>
       <div class="grid grid-cols-2 gap-4">
         <div><label class="text-sm text-gray-400 block mb-1">Branch</label><input type="text" id="d-branch" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="main"></div>
         <div><label class="text-sm text-gray-400 block mb-1">Entry Point</label><input type="text" id="d-entry" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="index.js"></div>
@@ -295,17 +303,121 @@ function renderDeploy() {
         <p class="text-xs text-gray-500 mt-2"><i class="ri-lock-line"></i> Values are encrypted at rest and injected securely at runtime.</p>
       </div>
 
-      <button type="submit" class="w-full bg-gradient-to-r from-brand-500 to-purple-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition"><i class="ri-rocket-2-line"></i> Deploy Bot</button>
+      <!-- Advanced Settings (collapsible) -->
+      <div class="border-t border-white/5 pt-4">
+        <button type="button" onclick="toggleAdvancedDeploy()" class="flex items-center gap-2 text-sm text-gray-400 hover:text-brand-400 transition">
+          <i id="adv-chevron" class="ri-arrow-right-s-line transition-transform"></i> Advanced Settings
+        </button>
+        <div id="advanced-deploy" class="hidden mt-4 space-y-4 pl-2 border-l-2 border-brand-500/20">
+          <div class="grid grid-cols-2 gap-4">
+            <div><label class="text-sm text-gray-400 block mb-1">Server Tier</label>
+              <select id="d-tier" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none">
+                <option value="basic">Basic (512MB RAM)</option>
+                <option value="standard">Standard (1GB RAM)</option>
+                <option value="performance">Performance (2GB RAM)</option>
+              </select>
+            </div>
+            <div><label class="text-sm text-gray-400 block mb-1">Max RAM (MB)</label><input type="number" id="d-maxram" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="512" min="128" max="4096"></div>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="checkbox" id="d-autorestart" checked class="w-4 h-4 rounded bg-white/5 border-white/10 text-brand-500 focus:ring-brand-500">
+            <label for="d-autorestart" class="text-sm text-gray-300">Auto-restart on crash</label>
+          </div>
+          <div><label class="text-sm text-gray-400 block mb-1">Install Command (override)</label><input type="text" id="d-install-cmd" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none font-mono text-sm" placeholder="npm install --production (default)"></div>
+        </div>
+      </div>
+
+      <div id="deploy-error" class="hidden bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-sm text-red-400"></div>
+
+      <button type="submit" id="deploy-btn" class="w-full bg-gradient-to-r from-brand-500 to-purple-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition flex items-center justify-center gap-2"><i class="ri-rocket-2-line"></i> Deploy Bot</button>
     </form></div>`;
+
+  // Bind form submit
+  document.getElementById('deploy-form').addEventListener('submit', handleDeploy);
+  // Bind repo URL change for auto-config
+  const repoInput = document.getElementById('d-repo');
+  repoInput.addEventListener('input', () => {
+    clearTimeout(_deployRepoTimeout);
+    _deployRepoTimeout = setTimeout(() => scanRepoConfig(), 800);
+  });
+  repoInput.addEventListener('paste', () => {
+    clearTimeout(_deployRepoTimeout);
+    _deployRepoTimeout = setTimeout(() => scanRepoConfig(), 500);
+  });
 }
 
-function addEnvRow(key = '', value = '') {
+function toggleAdvancedDeploy() {
+  const panel = document.getElementById('advanced-deploy');
+  const chevron = document.getElementById('adv-chevron');
+  panel.classList.toggle('hidden');
+  chevron.style.transform = panel.classList.contains('hidden') ? '' : 'rotate(90deg)';
+}
+
+async function scanRepoConfig() {
+  const repoUrl = document.getElementById('d-repo').value.trim();
+  if (!repoUrl || !repoUrl.includes('github.com/')) return;
+
+  const indicator = document.getElementById('repo-scan-indicator');
+  const status = document.getElementById('repo-scan-status');
+  indicator.classList.remove('hidden');
+  status.innerHTML = '<i class="ri-search-eye-line"></i> Scanning repository for config...';
+  status.className = 'text-xs text-brand-400 mt-1';
+
+  try {
+    const branch = document.getElementById('d-branch').value || 'main';
+    const data = await api('/api/repo-config', { method: 'POST', body: { repo_url: repoUrl, branch } });
+
+    // Auto-fill fields
+    if (data.bot_name && !document.getElementById('d-name').value) {
+      document.getElementById('d-name').value = data.bot_name;
+    }
+    if (data.description && !document.getElementById('d-desc').value) {
+      document.getElementById('d-desc').value = data.description;
+    }
+    if (data.entry_point) {
+      document.getElementById('d-entry').value = data.entry_point;
+    }
+
+    // Auto-fill env vars
+    if (data.env_keys && data.env_keys.length > 0) {
+      const container = document.getElementById('env-rows');
+      container.innerHTML = ''; // Clear existing
+      for (const envDef of data.env_keys) {
+        addEnvRow(envDef.key, envDef.value || '', envDef.description || '', envDef.required !== false);
+      }
+    }
+
+    const detected = [];
+    if (data.has_package_json) detected.push('package.json');
+    if (data.env_keys.length > 0) detected.push(`${data.env_keys.length} env vars`);
+    if (data.entry_point) detected.push(data.entry_point);
+    if (data.config) detected.push(data.config._source_file);
+
+    status.innerHTML = `<i class="ri-check-line text-green-400"></i> Auto-detected: ${detected.join(', ')}`;
+    status.className = 'text-xs text-green-400 mt-1';
+  } catch (e) {
+    status.innerHTML = `<i class="ri-information-line"></i> Could not auto-detect config. Fill in manually.`;
+    status.className = 'text-xs text-yellow-400 mt-1';
+  } finally {
+    indicator.classList.add('hidden');
+  }
+}
+
+function addEnvRow(key = '', value = '', description = '', required = true) {
   const container = document.getElementById('env-rows');
   const row = document.createElement('div');
-  row.className = 'env-row flex gap-2 items-center';
-  row.innerHTML = `<input type="text" placeholder="KEY" class="env-key w-2/5 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 focus:outline-none uppercase" value="${escapeHtml(key)}">
-    <input type="text" placeholder="value" class="env-val flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 focus:outline-none" value="${escapeHtml(value)}">
-    <button type="button" onclick="this.closest('.env-row').remove()" class="text-gray-500 hover:text-red-400 transition px-1"><i class="ri-close-line text-lg"></i></button>`;
+  row.className = 'env-row flex gap-2 items-start';
+  const reqBadge = required ? '<span class="text-red-400 text-xs">*</span>' : '';
+  const descHtml = description ? `<p class="text-xs text-gray-500 mt-0.5 pl-1">${escapeHtml(description)}</p>` : '';
+  row.innerHTML = `<div class="w-2/5">
+      <input type="text" placeholder="KEY" class="env-key w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 focus:outline-none uppercase" value="${escapeHtml(key)}">
+      ${descHtml}
+    </div>
+    <div class="flex-1 flex items-center gap-2">
+      <input type="text" placeholder="value ${required ? '(required)' : '(optional)'}" class="env-val flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 focus:outline-none" value="${escapeHtml(value)}">
+      ${reqBadge}
+      <button type="button" onclick="this.closest('.env-row').remove()" class="text-gray-500 hover:text-red-400 transition px-1"><i class="ri-close-line text-lg"></i></button>
+    </div>`;
   container.appendChild(row);
 }
 
@@ -321,15 +433,62 @@ function collectEnvVars() {
 
 async function handleDeploy(e) {
   if (e && e.preventDefault) e.preventDefault();
+  const btn = document.getElementById('deploy-btn');
+  const errEl = document.getElementById('deploy-error');
+  errEl.classList.add('hidden');
+
+  // Validate
+  const name = document.getElementById('d-name').value.trim();
+  const repoUrl = document.getElementById('d-repo').value.trim();
+  if (!name) { showDeployError('Bot name is required.'); return; }
+  if (!repoUrl) { showDeployError('GitHub repo URL is required.'); return; }
+  if (!repoUrl.includes('github.com/')) { showDeployError('Please enter a valid GitHub URL.'); return; }
+
+  // Disable button
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ri-loader-4-line animate-spin"></i> Creating bot...';
+
   const body = {
-    name: document.getElementById('d-name').value,
+    name,
     description: document.getElementById('d-desc').value,
-    repo_url: document.getElementById('d-repo').value,
-    branch: document.getElementById('d-branch').value,
-    entry_point: document.getElementById('d-entry').value,
-    env_vars: collectEnvVars()
+    repo_url: repoUrl,
+    branch: document.getElementById('d-branch').value || 'main',
+    entry_point: document.getElementById('d-entry').value || 'index.js',
+    env_vars: collectEnvVars(),
+    auto_restart: document.getElementById('d-autorestart') ? (document.getElementById('d-autorestart').checked ? 1 : 0) : 1,
+    server_tier: document.getElementById('d-tier') ? document.getElementById('d-tier').value : 'basic'
   };
-  try { const data = await api('/api/bots', { method: 'POST', body }); await api(`/api/bots/${data.bot.id}/deploy`, { method: 'POST' }); toast('Bot deployed!', 'success'); navigate('bots'); } catch(e) { toast(e.message, 'error'); }
+
+  try {
+    // Step 1: Create bot
+    const createData = await api('/api/bots', { method: 'POST', body });
+    const botId = createData.bot.id;
+
+    // Step 2: Deploy (clone + start)
+    btn.innerHTML = '<i class="ri-loader-4-line animate-spin"></i> Cloning & deploying...';
+    try {
+      await api(`/api/bots/${botId}/deploy`, { method: 'POST' });
+      toast('Bot deployed successfully!', 'success');
+    } catch (deployErr) {
+      // Bot was created but deploy failed — still navigate to bots so user can retry
+      toast(`Bot created but deploy had an issue: ${deployErr.message}. You can retry from My Bots.`, 'warning');
+    }
+
+    navigate('bots');
+  } catch (e) {
+    showDeployError(e.message);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ri-rocket-2-line"></i> Deploy Bot';
+  }
+}
+
+function showDeployError(msg) {
+  const errEl = document.getElementById('deploy-error');
+  if (errEl) {
+    errEl.textContent = msg;
+    errEl.classList.remove('hidden');
+  }
+  toast(msg, 'error');
 }
 
 // ─── ECONOMY ─────────────────────────────────────────────────────────────────
@@ -543,13 +702,19 @@ function renderAdminInstallBot() {
   </div>`;
 }
 
-function addInstallEnvRow(key = '', value = '') {
+function addInstallEnvRow(key = '', value = '', description = '') {
   const container = document.getElementById('install-env-rows');
   const row = document.createElement('div');
-  row.className = 'install-env-row flex gap-2 items-center';
-  row.innerHTML = `<input type="text" placeholder="KEY" class="install-env-key w-2/5 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 focus:outline-none uppercase" value="${escapeHtml(key)}">
-    <input type="text" placeholder="value" class="install-env-val flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 focus:outline-none" value="${escapeHtml(value)}">
-    <button type="button" onclick="this.closest('.install-env-row').remove()" class="text-gray-500 hover:text-red-400 transition px-1"><i class="ri-close-line text-lg"></i></button>`;
+  row.className = 'install-env-row flex gap-2 items-start';
+  const descHtml = description ? `<p class="text-xs text-gray-500 mt-0.5 pl-1">${escapeHtml(description)}</p>` : '';
+  row.innerHTML = `<div class="w-2/5">
+      <input type="text" placeholder="KEY" class="install-env-key w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 focus:outline-none uppercase" value="${escapeHtml(key)}">
+      ${descHtml}
+    </div>
+    <div class="flex-1 flex items-center gap-2">
+      <input type="text" placeholder="value" class="install-env-val flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 focus:outline-none" value="${escapeHtml(value)}">
+      <button type="button" onclick="this.closest('.install-env-row').remove()" class="text-gray-500 hover:text-red-400 transition px-1"><i class="ri-close-line text-lg"></i></button>
+    </div>`;
   container.appendChild(row);
 }
 
@@ -632,7 +797,7 @@ async function disable2FA() {
 }
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
-function toast(msg, type='info') { const c = document.getElementById('toast-container'); const colors = { success:'bg-green-500/90', error:'bg-red-500/90', info:'bg-brand-500/90' }; const t = document.createElement('div'); t.className = `${colors[type]||colors.info} text-white px-5 py-3 rounded-lg shadow-lg text-sm backdrop-blur-sm fade-in`; t.textContent = msg; c.appendChild(t); setTimeout(()=>t.remove(), 4000); }
+function toast(msg, type='info') { const c = document.getElementById('toast-container'); if (!c) return; const colors = { success:'bg-green-500/90', error:'bg-red-500/90', info:'bg-brand-500/90', warning:'bg-yellow-500/90' }; const t = document.createElement('div'); t.className = `${colors[type]||colors.info} text-white px-5 py-3 rounded-lg shadow-lg text-sm backdrop-blur-sm fade-in`; t.textContent = msg; c.appendChild(t); setTimeout(()=>{ try { t.remove(); } catch(_){} }, 4000); }
 function formatUptime(s) { if(!s) return '0s'; const h=Math.floor(s/3600), m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m`; }
 function timeAgo(d) { const s=Math.floor((Date.now()-new Date(d))/1000); if(s<60) return 'just now'; if(s<3600) return Math.floor(s/60)+'m ago'; if(s<86400) return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago'; }
 function escapeHtml(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -661,6 +826,25 @@ async function init() {
     showAuth();
   }
 }
+
+// ─── GLOBAL ERROR BOUNDARY ───────────────────────────────────────────────────
+// Prevents the site from crashing on unhandled errors
+window.addEventListener('error', function(event) {
+  console.error('[NovaSpark] Caught error:', event.error);
+  // Don't crash the whole app — show a toast if possible
+  try { toast('Something went wrong. Please try again.', 'error'); } catch(_) {}
+  event.preventDefault();
+});
+
+window.addEventListener('unhandledrejection', function(event) {
+  console.error('[NovaSpark] Unhandled promise rejection:', event.reason);
+  // Only show toast for non-auth errors (auth errors are handled)
+  const msg = event.reason?.message || String(event.reason);
+  if (!msg.includes('Unauthorized') && !msg.includes('TOKEN_EXPIRED')) {
+    try { toast('A background operation failed.', 'error'); } catch(_) {}
+  }
+  event.preventDefault();
+});
 
 // Wait for DOM before calling init so auth modal elements exist
 document.addEventListener('DOMContentLoaded', () => {

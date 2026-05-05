@@ -1,0 +1,30 @@
+{
+  "$schema": "https://novaspark-host.zone.id/config-schema.json",
+  "_comment": "NovaSpark Bot Config — Fill this in and save as novaspark.config.json in your bot repo root. The hosting platform auto-reads it on deploy.",
+  "name": "My Bot",
+  "description": "A short description of what your bot does",
+  "entry_point": "index.js",
+  "branch": "main",
+  "server_tier": "basic",
+  "auto_restart": true,
+  "max_ram_mb": 512,
+  "env": {
+    "BOT_TOKEN": {
+      "description": "Your Discord/WhatsApp bot token",
+      "required": true
+    },
+    "PREFIX": {
+      "description": "Command prefix",
+      "required": false,
+      "default": "!"
+    },
+    "OWNER_ID": {
+      "description": "Bot owner's user ID",
+      "required": true
+    },
+    "DATABASE_URL": {
+      "description": "Database connection string (optional)",
+      "required": false
+    }
+  }
+}

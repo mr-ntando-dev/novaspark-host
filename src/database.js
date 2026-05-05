@@ -307,11 +307,11 @@ const Bots = {
     const db = getDb();
     const id = data.id || generateId();
     db.prepare(`
-      INSERT INTO bots (id, owner_id, name, description, repo_url, branch, entry_point, server_tier, env_vars)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO bots (id, owner_id, name, description, repo_url, branch, entry_point, server_tier, env_vars, auto_restart)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, data.owner_id, data.name, data.description || '', data.repo_url || null,
       data.branch || 'main', data.entry_point || 'index.js', data.server_tier || 'basic',
-      JSON.stringify(data.env_vars || {}));
+      JSON.stringify(data.env_vars || {}), data.auto_restart !== undefined ? data.auto_restart : 1);
     return this.findById(id);
   },
 

@@ -34,7 +34,7 @@ router.get('/:id', authenticate, (req, res) => {
 
 // ─── CREATE BOT ──────────────────────────────────────────────────────────────
 router.post('/', authenticate, (req, res) => {
-  const { name, description, repo_url, branch, entry_point, env_vars } = req.body;
+  const { name, description, repo_url, branch, entry_point, env_vars, auto_restart, server_tier } = req.body;
 
   if (!name) return res.status(400).json({ error: 'Bot name required' });
 
@@ -56,7 +56,9 @@ router.post('/', authenticate, (req, res) => {
     repo_url: repo_url || null,
     branch: branch || 'main',
     entry_point: entry_point || 'index.js',
-    env_vars: env_vars || {}
+    env_vars: env_vars || {},
+    server_tier: server_tier || 'basic',
+    auto_restart: auto_restart !== undefined ? auto_restart : 1
   });
 
   res.status(201).json({ bot, message: 'Bot created' });
@@ -142,7 +144,7 @@ router.post('/:id/restart', authenticate, async (req, res) => {
 });
 
 // ─── DEPLOY (clone/pull + start) ─────────────────────────────────────────────
-router.post('/:id/deploy', authenticate, (req, res) => {
+router.post('/:id/deploy', authenticate, async (req, res) => {
   const bot = Bots.findById(req.params.id);
   if (!bot) return res.status(404).json({ error: 'Bot not found' });
   if (bot.owner_id !== req.user.id && req.user.role !== 'admin') {
@@ -152,14 +154,20 @@ router.post('/:id/deploy', authenticate, (req, res) => {
 
   try {
     // Stop if running
-    stopBot(req.params.id);
+    try { stopBot(req.params.id); } catch (_) {}
+
     // Clone/pull
+    Bots.update(req.params.id, { status: 'deploying' });
     cloneRepo(req.params.id, bot.repo_url, bot.branch || 'main');
+
     // Start
     const result = startBot(req.params.id);
+    Notifications.create(bot.owner_id, 'success', 'Bot Deployed', `${bot.name} was deployed successfully.`);
     res.json({ message: 'Deployed successfully', ...result });
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    Bots.update(req.params.id, { status: 'failed' });
+    BotLogs.add(req.params.id, 'error', `Deploy failed: ${e.message}`);
+    res.status(400).json({ error: `Deploy failed: ${e.message}` });
   }
 });
 
