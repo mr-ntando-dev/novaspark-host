@@ -29,7 +29,7 @@ async function api(path, opts = {}) {
 function setTokens(access, refresh) { token = access; refreshToken = refresh; localStorage.setItem('ns_token', access); localStorage.setItem('ns_refresh', refresh); }
 
 async function handleLogin(e) {
-  e.preventDefault();
+  if (e && e.preventDefault) e.preventDefault();
   const username = document.getElementById('login-username').value;
   const password = document.getElementById('login-password').value;
   const totp_code = document.getElementById('login-totp').value || undefined;
@@ -38,19 +38,29 @@ async function handleLogin(e) {
     if (data.requires_2fa) { document.getElementById('totp-field').classList.remove('hidden'); return; }
     setTokens(data.accessToken, data.refreshToken);
     currentUser = data.user;
-    hideAuth(); init();
+    hideAuth();
+    updateUserCard();
+    if (currentUser.role === 'admin') document.getElementById('admin-nav').classList.remove('hidden');
+    navigate('dashboard');
+    connectWS();
+    loadNotifBadge();
     toast('Welcome back, ' + currentUser.username, 'success');
   } catch (err) { showError('auth-error', err.message); }
 }
 
 async function handleSignup(e) {
-  e.preventDefault();
+  if (e && e.preventDefault) e.preventDefault();
   const body = { username: document.getElementById('signup-username').value, password: document.getElementById('signup-password').value, email: document.getElementById('signup-email').value || undefined, referral_code: document.getElementById('signup-referral').value || undefined };
   try {
     const data = await api('/api/auth/signup', { method: 'POST', body });
     setTokens(data.accessToken, data.refreshToken);
     currentUser = data.user;
-    hideAuth(); init();
+    hideAuth();
+    updateUserCard();
+    if (currentUser.role === 'admin') document.getElementById('admin-nav').classList.remove('hidden');
+    navigate('dashboard');
+    connectWS();
+    loadNotifBadge();
     toast('Account created! Welcome to NovaSpark', 'success');
   } catch (err) { showError('signup-error', err.message); }
 }
@@ -189,7 +199,7 @@ function renderDeploy() {
 }
 
 async function handleDeploy(e) {
-  e.preventDefault();
+  if (e && e.preventDefault) e.preventDefault();
   const body = { name: document.getElementById('d-name').value, description: document.getElementById('d-desc').value, repo_url: document.getElementById('d-repo').value, branch: document.getElementById('d-branch').value, entry_point: document.getElementById('d-entry').value };
   try { const data = await api('/api/bots', { method: 'POST', body }); await api(`/api/bots/${data.bot.id}/deploy`, { method: 'POST' }); toast('Bot deployed!', 'success'); navigate('bots'); } catch(e) { toast(e.message, 'error'); }
 }
@@ -213,7 +223,7 @@ async function renderEconomy() {
 }
 
 async function claimDaily() { try { const d = await api('/api/economy/daily-reward', { method: 'POST' }); toast(`+${d.coins_earned} coins! Streak: ${d.login_streak}`, 'success'); } catch(e) { toast(e.message, 'error'); } }
-async function redeemCode(e) { e.preventDefault(); const code = document.getElementById('redeem-input').value; try { const d = await api('/api/economy/redeem', { method: 'POST', body: { code } }); toast(d.message, 'success'); renderEconomy(); } catch(e) { toast(e.message, 'error'); } }
+async function redeemCode(e) { if (e && e.preventDefault) e.preventDefault(); const code = document.getElementById('redeem-input').value; try { const d = await api('/api/economy/redeem', { method: 'POST', body: { code } }); toast(d.message, 'success'); renderEconomy(); } catch(e) { toast(e.message, 'error'); } }
 
 // ─── LEADERBOARD ─────────────────────────────────────────────────────────────
 async function renderLeaderboard() {
@@ -255,7 +265,7 @@ function renderProfile() {
     </form></div></div>`;
 }
 
-async function updateProfile(e) { e.preventDefault(); try { const data = await api('/api/auth/me', { method: 'PUT', body: { bio: document.getElementById('p-bio').value, avatar_emoji: document.getElementById('p-emoji').value, banner_color: document.getElementById('p-color').value } }); currentUser = data.user; updateUserCard(); toast('Profile updated','success'); } catch(e) { toast(e.message,'error'); } }
+async function updateProfile(e) { if (e && e.preventDefault) e.preventDefault(); try { const data = await api('/api/auth/me', { method: 'PUT', body: { bio: document.getElementById('p-bio').value, avatar_emoji: document.getElementById('p-emoji').value, banner_color: document.getElementById('p-color').value } }); currentUser = data.user; updateUserCard(); toast('Profile updated','success'); } catch(e) { toast(e.message,'error'); } }
 
 // ─── SETTINGS ────────────────────────────────────────────────────────────────
 function renderSettings() {
@@ -270,7 +280,7 @@ function renderSettings() {
   </div>`;
 }
 
-async function changePassword(e) { e.preventDefault(); try { await api('/api/auth/change-password', { method: 'POST', body: { current_password: document.getElementById('s-curpass').value, new_password: document.getElementById('s-newpass').value } }); toast('Password updated','success'); } catch(e) { toast(e.message,'error'); } }
+async function changePassword(e) { if (e && e.preventDefault) e.preventDefault(); try { await api('/api/auth/change-password', { method: 'POST', body: { current_password: document.getElementById('s-curpass').value, new_password: document.getElementById('s-newpass').value } }); toast('Password updated','success'); } catch(e) { toast(e.message,'error'); } }
 
 // ─── ADMIN PAGES ─────────────────────────────────────────────────────────────
 async function renderAdminUsers() {
@@ -304,7 +314,7 @@ async function adminEditUser(userId) {
 }
 
 async function saveAdminUser(e, userId) {
-  e.preventDefault();
+  if (e && e.preventDefault) e.preventDefault();
   try {
     await api(`/api/admin/users/${userId}`, { method: 'PUT', body: {
       role: document.getElementById('ae-role').value,
@@ -331,8 +341,8 @@ async function renderAdminCodes() {
   try { const data = await api('/api/admin/codes'); document.getElementById('codes-list').innerHTML = data.codes.length ? data.codes.map(c => `<div class="flex justify-between items-center py-2 border-b border-white/5"><span class="font-mono text-brand-400">${c.code}</span><span class="text-sm text-gray-400">${c.value} coins • ${c.used_count}/${c.max_uses} used</span></div>`).join('') : '<p class="text-gray-500 text-sm">No codes</p>'; } catch(e) { toast(e.message,'error'); }
 }
 
-async function createCode(e) { e.preventDefault(); try { await api('/api/admin/codes', { method: 'POST', body: { custom_code: document.getElementById('cc-code').value||undefined, value: parseInt(document.getElementById('cc-value').value), max_uses: parseInt(document.getElementById('cc-uses').value)||1 } }); toast('Code created','success'); renderAdminCodes(); } catch(e) { toast(e.message,'error'); } }
-async function sendBroadcast(e) { e.preventDefault(); try { const d = await api('/api/admin/broadcast', { method: 'POST', body: { title: document.getElementById('bc-title').value, message: document.getElementById('bc-msg').value } }); toast(`Sent to ${d.recipients} users`,'success'); } catch(e) { toast(e.message,'error'); } }
+async function createCode(e) { if (e && e.preventDefault) e.preventDefault(); try { await api('/api/admin/codes', { method: 'POST', body: { custom_code: document.getElementById('cc-code').value||undefined, value: parseInt(document.getElementById('cc-value').value), max_uses: parseInt(document.getElementById('cc-uses').value)||1 } }); toast('Code created','success'); renderAdminCodes(); } catch(e) { toast(e.message,'error'); } }
+async function sendBroadcast(e) { if (e && e.preventDefault) e.preventDefault(); try { const d = await api('/api/admin/broadcast', { method: 'POST', body: { title: document.getElementById('bc-title').value, message: document.getElementById('bc-msg').value } }); toast(`Sent to ${d.recipients} users`,'success'); } catch(e) { toast(e.message,'error'); } }
 
 // ─── ADMIN: INSTALL BOT ──────────────────────────────────────────────────────
 function renderAdminInstallBot() {
@@ -396,7 +406,7 @@ function renderAdminInstallBot() {
 }
 
 async function handleInstallNovaSpark(e) {
-  e.preventDefault();
+  if (e && e.preventDefault) e.preventDefault();
   const btn = document.getElementById('install-btn');
   btn.disabled = true;
   btn.innerHTML = '<i class="ri-loader-4-line animate-spin"></i> Installing...';
@@ -417,6 +427,49 @@ async function handleInstallNovaSpark(e) {
     btn.disabled = false;
     btn.innerHTML = '<i class="ri-install-line"></i> Install & Deploy NovaSpark Bot';
   }
+}
+
+// ─── 2FA ─────────────────────────────────────────────────────────────────────
+async function setup2FA() {
+  try {
+    const data = await api('/api/auth/2fa/setup', { method: 'POST' });
+    const el = document.getElementById('page-content');
+    // Inject QR code + verify form below existing settings content
+    const container = document.createElement('div');
+    container.id = '2fa-setup-panel';
+    container.className = 'glass rounded-xl p-6 space-y-4 mt-4 max-w-xl';
+    container.innerHTML = `
+      <h3 class="font-semibold text-white">Scan QR Code</h3>
+      <img src="${data.qr_code}" alt="2FA QR" class="rounded-lg mx-auto w-48 h-48">
+      <p class="text-xs text-gray-400 font-mono break-all">Secret: ${data.secret}</p>
+      <form onsubmit="verify2FA(event)" class="flex gap-3">
+        <input type="text" id="totp-verify" class="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-brand-500 focus:outline-none font-mono" placeholder="Enter 6-digit code" maxlength="6" required>
+        <button type="submit" class="bg-brand-500 text-white px-6 py-2 rounded-lg hover:bg-brand-600 transition">Verify &amp; Enable</button>
+      </form>`;
+    el.appendChild(container);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function verify2FA(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const code = document.getElementById('totp-verify').value;
+  try {
+    await api('/api/auth/2fa/verify', { method: 'POST', body: { code } });
+    currentUser.two_fa_enabled = true;
+    toast('2FA enabled successfully!', 'success');
+    renderSettings();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function disable2FA() {
+  const password = prompt('Enter your password to disable 2FA:');
+  if (!password) return;
+  try {
+    await api('/api/auth/2fa/disable', { method: 'POST', body: { password } });
+    currentUser.two_fa_enabled = false;
+    toast('2FA disabled', 'success');
+    renderSettings();
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
@@ -441,15 +494,16 @@ async function init() {
     navigate('dashboard');
     connectWS();
     loadNotifBadge();
-  } catch(e) { showAuth(); }
+  } catch(e) {
+    // Clear stale tokens and show auth
+    token = null; refreshToken = null;
+    localStorage.removeItem('ns_token');
+    localStorage.removeItem('ns_refresh');
+    showAuth();
+  }
 }
 
-// Attach form listeners after DOM is ready (belt-and-suspenders for onsubmit)
+// Wait for DOM before calling init so auth modal elements exist
 document.addEventListener('DOMContentLoaded', () => {
-  const loginForm = document.getElementById('login-form');
-  const signupForm = document.getElementById('signup-form');
-  if (loginForm) loginForm.addEventListener('submit', (e) => { e.preventDefault(); handleLogin(e); });
-  if (signupForm) signupForm.addEventListener('submit', (e) => { e.preventDefault(); handleSignup(e); });
+  init();
 });
-
-init();
