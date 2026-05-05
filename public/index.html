@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NovaSpark V11 - Bot Hosting Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+          colors: {
+            brand: { 50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81' },
+            surface: { 800: '#1e1b2e', 900: '#0f0d1a', 950: '#080712' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; background: #080712; }
+    .glass { background: rgba(30, 27, 46, 0.6); backdrop-filter: blur(20px); border: 1px solid rgba(99, 102, 241, 0.1); }
+    .glass-strong { background: rgba(30, 27, 46, 0.85); backdrop-filter: blur(30px); border: 1px solid rgba(99, 102, 241, 0.15); }
+    .glow { box-shadow: 0 0 30px rgba(99, 102, 241, 0.15); }
+    .glow-text { text-shadow: 0 0 20px rgba(99, 102, 241, 0.5); }
+    .gradient-border { border-image: linear-gradient(135deg, #6366f1, #a855f7, #ec4899) 1; }
+    .animate-pulse-slow { animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .status-running { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+    .status-stopped { background: #6b7280; }
+    .status-crashed { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+    .log-info { color: #a5b4fc; }
+    .log-error { color: #fca5a5; }
+    .log-warn { color: #fde047; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.3); border-radius: 3px; }
+    .fade-in { animation: fadeIn 0.3s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .sidebar-link { transition: all 0.2s; }
+    .sidebar-link:hover, .sidebar-link.active { background: rgba(99, 102, 241, 0.15); color: #a5b4fc; }
+  </style>
+</head>
+<body class="min-h-screen text-gray-200 overflow-x-hidden">
+  <!-- Background gradient -->
+  <div class="fixed inset-0 -z-10">
+    <div class="absolute top-0 left-1/4 w-96 h-96 bg-brand-600/10 rounded-full blur-3xl"></div>
+    <div class="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-600/10 rounded-full blur-3xl"></div>
+  </div>
+
+  <div id="app" class="flex h-screen">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="hidden lg:flex flex-col w-64 glass-strong h-screen fixed left-0 top-0 z-40">
+      <!-- Logo -->
+      <div class="p-6 border-b border-white/5">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-purple-500 flex items-center justify-center">
+            <i class="ri-flashlight-fill text-white text-xl"></i>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold text-white">NovaSpark</h1>
+            <span class="text-xs text-brand-400 font-mono">v11.0.0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nav -->
+      <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+        <a href="#" onclick="navigate('dashboard')" class="sidebar-link active flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="dashboard">
+          <i class="ri-dashboard-3-line text-lg"></i> Dashboard
+        </a>
+        <a href="#" onclick="navigate('bots')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="bots">
+          <i class="ri-robot-2-line text-lg"></i> My Bots
+        </a>
+        <a href="#" onclick="navigate('deploy')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="deploy">
+          <i class="ri-rocket-2-line text-lg"></i> Deploy
+        </a>
+        <a href="#" onclick="navigate('economy')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="economy">
+          <i class="ri-coin-line text-lg"></i> Economy
+        </a>
+        <a href="#" onclick="navigate('leaderboard')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="leaderboard">
+          <i class="ri-trophy-line text-lg"></i> Leaderboard
+        </a>
+        <a href="#" onclick="navigate('notifications')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="notifications">
+          <i class="ri-notification-3-line text-lg"></i> Notifications
+          <span id="notif-badge" class="hidden ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full"></span>
+        </a>
+
+        <div class="pt-4 mt-4 border-t border-white/5">
+          <p class="text-xs text-gray-500 px-4 mb-2 uppercase tracking-wider">Account</p>
+          <a href="#" onclick="navigate('profile')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="profile">
+            <i class="ri-user-3-line text-lg"></i> Profile
+          </a>
+          <a href="#" onclick="navigate('settings')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="settings">
+            <i class="ri-settings-4-line text-lg"></i> Settings
+          </a>
+        </div>
+
+        <!-- Admin section (hidden for non-admins) -->
+        <div id="admin-nav" class="hidden pt-4 mt-4 border-t border-white/5">
+          <p class="text-xs text-gray-500 px-4 mb-2 uppercase tracking-wider">Admin</p>
+          <a href="#" onclick="navigate('admin-users')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="admin-users">
+            <i class="ri-group-line text-lg"></i> Users
+          </a>
+          <a href="#" onclick="navigate('admin-system')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="admin-system">
+            <i class="ri-server-line text-lg"></i> System
+          </a>
+          <a href="#" onclick="navigate('admin-codes')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="admin-codes">
+            <i class="ri-coupon-3-line text-lg"></i> Codes
+          </a>
+        </div>
+      </nav>
+
+      <!-- User card -->
+      <div class="p-4 border-t border-white/5">
+        <div id="user-card" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 cursor-pointer transition">
+          <div class="w-9 h-9 rounded-full bg-brand-500/20 flex items-center justify-center text-lg" id="user-avatar">🤖</div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-white truncate" id="user-name">—</p>
+            <p class="text-xs text-gray-400" id="user-plan">Free</p>
+          </div>
+          <button onclick="logout()" class="text-gray-400 hover:text-red-400 transition">
+            <i class="ri-logout-box-r-line"></i>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="flex-1 lg:ml-64 overflow-y-auto">
+      <!-- Top bar (mobile) -->
+      <header class="lg:hidden sticky top-0 z-30 glass-strong px-4 py-3 flex items-center justify-between">
+        <button onclick="toggleSidebar()" class="text-white"><i class="ri-menu-line text-xl"></i></button>
+        <span class="font-bold text-brand-400">NovaSpark V11</span>
+        <button onclick="navigate('notifications')" class="text-white relative">
+          <i class="ri-notification-3-line text-xl"></i>
+          <span id="mobile-notif-dot" class="hidden absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+        </button>
+      </header>
+
+      <!-- Pages -->
+      <div id="page-content" class="p-6 lg:p-8 fade-in">
+        <!-- Content loaded dynamically -->
+      </div>
+    </main>
+  </div>
+
+  <!-- Auth Modal (shown when not logged in) -->
+  <div id="auth-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-surface-950/90 backdrop-blur-sm hidden">
+    <div class="glass-strong rounded-2xl p-8 w-full max-w-md mx-4 glow">
+      <div class="text-center mb-8">
+        <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-brand-500 to-purple-500 flex items-center justify-center mb-4">
+          <i class="ri-flashlight-fill text-white text-3xl"></i>
+        </div>
+        <h2 class="text-2xl font-bold text-white">NovaSpark V11</h2>
+        <p class="text-gray-400 mt-1">Next-gen bot hosting platform</p>
+      </div>
+
+      <!-- Login form -->
+      <form id="login-form" class="space-y-4" onsubmit="handleLogin(event)">
+        <div>
+          <label class="text-sm text-gray-400 mb-1 block">Username</label>
+          <input type="text" id="login-username" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none transition" placeholder="Enter username" required>
+        </div>
+        <div>
+          <label class="text-sm text-gray-400 mb-1 block">Password</label>
+          <input type="password" id="login-password" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none transition" placeholder="Enter password" required>
+        </div>
+        <div id="totp-field" class="hidden">
+          <label class="text-sm text-gray-400 mb-1 block">2FA Code</label>
+          <input type="text" id="login-totp" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none transition text-center font-mono tracking-widest" placeholder="000000" maxlength="6">
+        </div>
+        <button type="submit" class="w-full bg-gradient-to-r from-brand-500 to-purple-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition">
+          Sign In
+        </button>
+        <p id="auth-error" class="text-red-400 text-sm text-center hidden"></p>
+      </form>
+
+      <div class="mt-6 text-center">
+        <p class="text-gray-400 text-sm">
+          Don't have an account?
+          <a href="#" onclick="showSignup()" class="text-brand-400 hover:text-brand-300">Sign up</a>
+        </p>
+      </div>
+
+      <!-- Signup form (hidden) -->
+      <form id="signup-form" class="space-y-4 hidden" onsubmit="handleSignup(event)">
+        <div>
+          <label class="text-sm text-gray-400 mb-1 block">Username</label>
+          <input type="text" id="signup-username" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none transition" placeholder="Choose a username" required minlength="3" maxlength="20">
+        </div>
+        <div>
+          <label class="text-sm text-gray-400 mb-1 block">Email (optional)</label>
+          <input type="email" id="signup-email" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none transition" placeholder="your@email.com">
+        </div>
+        <div>
+          <label class="text-sm text-gray-400 mb-1 block">Password</label>
+          <input type="password" id="signup-password" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none transition" placeholder="Min 6 characters" required minlength="6">
+        </div>
+        <div>
+          <label class="text-sm text-gray-400 mb-1 block">Referral Code (optional)</label>
+          <input type="text" id="signup-referral" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none transition" placeholder="NS-XXXXXXXX">
+        </div>
+        <button type="submit" class="w-full bg-gradient-to-r from-brand-500 to-purple-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition">
+          Create Account
+        </button>
+        <p id="signup-error" class="text-red-400 text-sm text-center hidden"></p>
+      </form>
+
+      <div id="signup-toggle" class="hidden mt-6 text-center">
+        <p class="text-gray-400 text-sm">
+          Already have an account?
+          <a href="#" onclick="showLogin()" class="text-brand-400 hover:text-brand-300">Sign in</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
