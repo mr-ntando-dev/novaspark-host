@@ -13,18 +13,42 @@ async function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${API}${path}`, { ...opts, headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+
   if (res.status === 401) {
     const data = await res.json();
-    // Auth endpoints (login/signup/refresh) should NOT trigger a logout — just throw so the caller can show the error
-    if (path.startsWith('/api/auth/')) {
-      throw new Error(data.error || 'Unauthorized');
+
+    // Auth endpoints (login/signup) should just throw — never auto-logout
+    if (path.startsWith('/api/auth/login') || path.startsWith('/api/auth/signup')) {
+      throw new Error(data.error || 'Invalid credentials');
     }
+
+    // Try to refresh expired token once
     if (data.code === 'TOKEN_EXPIRED' && refreshToken) {
-      const r = await fetch(`${API}/api/auth/refresh`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken }) });
-      if (r.ok) { const t = await r.json(); setTokens(t.accessToken, t.refreshToken); return api(path, opts); }
+      const r = await fetch(`${API}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken })
+      });
+      if (r.ok) {
+        const t = await r.json();
+        setTokens(t.accessToken, t.refreshToken);
+        return api(path, opts);
+      }
     }
-    logout(); throw new Error('Unauthorized');
+
+    // Token is truly invalid/expired and refresh failed — show auth modal
+    // but do NOT hard-logout from background requests (notif badge, etc.)
+    if (currentUser) {
+      token = null; refreshToken = null; currentUser = null;
+      localStorage.removeItem('ns_token');
+      localStorage.removeItem('ns_refresh');
+      if (ws) { ws.close(); ws = null; }
+      showAuth();
+      toast('Session expired. Please log in again.', 'error');
+    }
+    throw new Error(data.error || 'Unauthorized');
   }
+
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Request failed');
   return data;
