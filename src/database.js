@@ -207,6 +207,10 @@ function initSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON audit_log(actor_id);
     CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
   `);
+
+  // ── Schema migrations (idempotent — safe to run on every boot) ──────────
+  // V11.2: add session_dir column to bots table
+  try { db.exec(`ALTER TABLE bots ADD COLUMN session_dir TEXT DEFAULT NULL`); } catch (_) {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

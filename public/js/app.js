@@ -113,6 +113,73 @@ function connectWS() {
 function handleWSMessage(data) {
   if (data.type === 'system_stats') updateLiveStats(data.data);
   if (data.type === 'notification') { loadNotifBadge(); toast(data.title || 'New notification', 'info'); }
+
+  // Real-time bot status updates — refresh bot cards if visible
+  if (data.type === 'bot_status') {
+    const dot = document.querySelector(`.status-dot[data-bot-id="${data.botId}"]`);
+    if (dot) {
+      dot.className = `status-dot status-${data.status}`;
+    }
+    // Re-render bots/dashboard if currently showing
+    const activePage = document.querySelector('.sidebar-link.active');
+    if (activePage) {
+      const page = activePage.getAttribute('data-page');
+      if (page === 'bots' || page === 'dashboard') {
+        // Debounce re-render
+        clearTimeout(window._botStatusRefreshTimer);
+        window._botStatusRefreshTimer = setTimeout(() => {
+          if (page === 'bots') renderBots();
+          else renderDashboard();
+        }, 800);
+      }
+    }
+  }
+
+  // Real-time log streaming — append to open log view
+  if (data.type === 'bot_log') {
+    const logContainer = document.getElementById('log-container');
+    const activeLogBotId = logContainer && logContainer.getAttribute('data-bot-id');
+    if (logContainer && activeLogBotId === data.botId) {
+      const div = document.createElement('div');
+      div.className = `log-${data.level}`;
+      div.innerHTML = `<span class="text-gray-600">${data.timestamp}</span> [${data.level.toUpperCase()}] ${escapeHtml(data.message)}`;
+      logContainer.appendChild(div);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+  }
+
+  // QR code from bot — show modal so user can scan
+  if (data.type === 'bot_qr') {
+    showBotQRModal(data.botId, data.qr);
+  }
+}
+
+function showBotQRModal(botId, qrDataUrl) {
+  // Remove existing QR modal if open
+  const existing = document.getElementById('bot-qr-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'bot-qr-modal';
+  modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
+  modal.innerHTML = `
+    <div class="glass rounded-2xl p-8 max-w-sm w-full text-center space-y-4 border border-brand-500/30">
+      <div class="flex items-center justify-between">
+        <h3 class="text-xl font-bold text-white">Scan QR Code</h3>
+        <button onclick="document.getElementById('bot-qr-modal').remove()" class="text-gray-400 hover:text-white">
+          <i class="ri-close-line text-xl"></i>
+        </button>
+      </div>
+      <p class="text-gray-400 text-sm">Open WhatsApp → Linked Devices → Link a Device, then scan this code.</p>
+      <div class="bg-white rounded-xl p-3 inline-block mx-auto">
+        <img src="${qrDataUrl}" alt="WhatsApp QR Code" class="w-56 h-56 object-contain">
+      </div>
+      <p class="text-xs text-yellow-400"><i class="ri-time-line"></i> QR codes expire in ~60 seconds. A new one will appear automatically.</p>
+      <button onclick="document.getElementById('bot-qr-modal').remove()" class="w-full bg-brand-500/20 text-brand-400 border border-brand-500/30 rounded-lg py-2 hover:bg-brand-500/30 transition text-sm">Close</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  toast('WhatsApp QR code ready — scan it now!', 'info');
 }
 
 // ─── NAVIGATION ──────────────────────────────────────────────────────────────
@@ -268,8 +335,28 @@ async function saveEnv(botId) {
 
 async function viewLogs(id) {
   const el = document.getElementById('page-content');
-  el.innerHTML = `<div class="space-y-4"><div class="flex items-center gap-3"><button onclick="navigate('bots')" class="text-gray-400 hover:text-white"><i class="ri-arrow-left-line text-xl"></i></button><h2 class="text-2xl font-bold text-white">Bot Logs</h2></div><div id="log-container" class="glass rounded-xl p-4 h-96 overflow-y-auto font-mono text-xs space-y-1"><p class="text-gray-500">Loading...</p></div><button onclick="clearLogs('${id}')" class="text-sm text-red-400 hover:text-red-300">Clear Logs</button></div>`;
-  try { const data = await api(`/api/bots/${id}/logs`); const c = document.getElementById('log-container'); c.innerHTML = data.logs.reverse().map(l => `<div class="log-${l.level}"><span class="text-gray-600">${l.timestamp}</span> [${l.level.toUpperCase()}] ${escapeHtml(l.message)}</div>`).join(''); c.scrollTop = c.scrollHeight; } catch(e) { toast(e.message,'error'); }
+  el.innerHTML = `<div class="space-y-4">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <button onclick="navigate('bots')" class="text-gray-400 hover:text-white"><i class="ri-arrow-left-line text-xl"></i></button>
+        <h2 class="text-2xl font-bold text-white">Bot Logs</h2>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-green-400 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-400 inline-block animate-pulse"></span>Live</span>
+        <button onclick="clearLogs('${id}')" class="text-sm text-red-400 hover:text-red-300">Clear Logs</button>
+      </div>
+    </div>
+    <div id="log-container" data-bot-id="${id}" class="glass rounded-xl p-4 h-[32rem] overflow-y-auto font-mono text-xs space-y-1">
+      <p class="text-gray-500">Loading...</p>
+    </div>
+  </div>`;
+  try {
+    const data = await api(`/api/bots/${id}/logs`);
+    const c = document.getElementById('log-container');
+    if (!c) return;
+    c.innerHTML = data.logs.reverse().map(l => `<div class="log-${l.level}"><span class="text-gray-600">${l.timestamp}</span> [${l.level.toUpperCase()}] ${escapeHtml(l.message)}</div>`).join('') || '<p class="text-gray-500">No logs yet.</p>';
+    c.scrollTop = c.scrollHeight;
+  } catch(e) { toast(e.message,'error'); }
 }
 
 async function clearLogs(id) { try { await api(`/api/bots/${id}/logs`, { method: 'DELETE' }); toast('Logs cleared','success'); viewLogs(id); } catch(e) { toast(e.message,'error'); } }

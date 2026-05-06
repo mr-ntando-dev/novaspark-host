@@ -1,13 +1,23 @@
 {
   "$schema": "https://novaspark-host.zone.id/config-schema.json",
-  "_comment": "NovaSpark Bot Config — Fill this in and save as novaspark.config.json in your bot repo root. The hosting platform auto-reads it on deploy.",
+  "_comment": "NovaSpark Bot Config — Save as novaspark.config.json in your bot repo root. The platform auto-reads it on deploy.",
+
   "name": "My Bot",
   "description": "A short description of what your bot does",
+
   "entry_point": "index.js",
   "branch": "main",
   "server_tier": "basic",
   "auto_restart": true,
   "max_ram_mb": 512,
+
+  "_session_dir_comment": "Folder where WhatsApp auth session files are stored. Platform backs this up so you don't re-scan QR on every restart. Common: auth_info_baileys, session, .session, auth",
+  "session_dir": "auth_info_baileys",
+
+  "_config_file_comment": "If your bot reads config from a JS file instead of process.env, set this so the platform can write your env vars into it automatically.",
+  "config_file": "config/config.js",
+  "config_format": "module.exports",
+
   "env": {
     "BOT_TOKEN": {
       "description": "Your Discord/WhatsApp bot token",

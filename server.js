@@ -14,7 +14,7 @@ const chalk = require('chalk');
 
 const { Users, Bots, BotLogs, Notifications, AuditLog, getDb } = require('./src/database');
 const { securityHeaders, globalLimiter } = require('./src/middleware/security');
-const { startWatchdog, getRunningBots } = require('./src/utils/bot-engine');
+const { startWatchdog, getRunningBots, setWsBroadcast } = require('./src/utils/bot-engine');
 const { Alerts } = require('./src/utils/discord-alerts');
 
 // Routes
@@ -166,6 +166,9 @@ function wsBroadcastAll(payload) {
 // Make broadcast available globally
 global.wsBroadcast = wsBroadcast;
 global.wsBroadcastAll = wsBroadcastAll;
+
+// Inject WebSocket broadcaster into bot-engine so bots can push live updates
+setWsBroadcast(wsBroadcast, wsBroadcastAll);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADMIN BOOTSTRAP

@@ -25,10 +25,10 @@ const BOT_RESTART_BACKOFF_MAX = 5 * 60 * 1000;
 const BOT_MAX_RESTARTS = 9999;
 
 // Noise patterns to suppress from WhatsApp/Baileys stderr
+// NOTE: do NOT add qr/QR here — we need to detect and forward those to the dashboard
 const NOISE_PATTERNS = [
   /waiting for messages/i,
   /waiting for connection/i,
-  /qr code/i,
   /reconnecting/i,
   /connection closed/i,
   /trying to reconnect/i,
@@ -36,6 +36,38 @@ const NOISE_PATTERNS = [
   /ping timeout/i,
   /socket closed/i,
 ];
+
+// QR detection patterns (Baileys outputs QR as ASCII art or base64 data URLs)
+const QR_PATTERNS = [
+  /data:image\/png;base64,/i,
+  /▄|█|▀/,  // block characters used in terminal QR art
+];
+
+// WebSocket broadcaster — injected by server.js after boot
+let _wsBroadcast = null;
+let _wsBroadcastAll = null;
+function setWsBroadcast(broadcastFn, broadcastAllFn) {
+  _wsBroadcast = broadcastFn;
+  _wsBroadcastAll = broadcastAllFn;
+}
+
+function broadcastBotStatus(ownerId, botId, status, extra = {}) {
+  if (_wsBroadcast) {
+    try { _wsBroadcast(ownerId, { type: 'bot_status', botId, status, ...extra }); } catch (_) {}
+  }
+}
+
+function broadcastBotLog(ownerId, botId, level, message) {
+  if (_wsBroadcast) {
+    try { _wsBroadcast(ownerId, { type: 'bot_log', botId, level, message, timestamp: new Date().toISOString() }); } catch (_) {}
+  }
+}
+
+function broadcastBotQR(ownerId, botId, qrData) {
+  if (_wsBroadcast) {
+    try { _wsBroadcast(ownerId, { type: 'bot_qr', botId, qr: qrData }); } catch (_) {}
+  }
+}
 
 /**
  * Known broken git dependencies and their working replacements.
@@ -133,6 +165,53 @@ function patchBrokenDeps(botId, botDir) {
 }
 
 /**
+ * Read novaspark.config.json from a bot directory (if present).
+ * Returns parsed config or {} if missing/invalid.
+ */
+function readBotConfig(botDir) {
+  const configPath = path.join(botDir, 'novaspark.config.json');
+  if (!fs.existsSync(configPath)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch (_) {
+    return {};
+  }
+}
+
+/**
+ * Apply novaspark.config.json hints to the bot record in the DB.
+ * Only updates fields that are not already manually set by the user.
+ */
+function applyBotConfig(botId, botDir) {
+  const cfg = readBotConfig(botDir);
+  if (!cfg || Object.keys(cfg).length === 0) return;
+
+  const bot = Bots.findById(botId);
+  if (!bot) return;
+
+  const updates = {};
+  // Only apply entry_point from config if the bot still has the default value
+  if (cfg.entry_point && bot.entry_point === 'index.js') {
+    updates.entry_point = cfg.entry_point;
+  }
+  if (cfg.session_dir) {
+    // Store session_dir so startBot knows which folder to treat as persistent
+    updates.session_dir = cfg.session_dir;
+  }
+  if (cfg.auto_restart !== undefined && bot.auto_restart === 1) {
+    updates.auto_restart = cfg.auto_restart ? 1 : 0;
+  }
+  if (cfg.max_ram_mb && !bot.max_ram_mb) {
+    updates.max_ram_mb = cfg.max_ram_mb;
+  }
+
+  if (Object.keys(updates).length > 0) {
+    Bots.update(botId, updates);
+    BotLogs.add(botId, 'info', `Applied novaspark.config.json: ${JSON.stringify(updates)}`);
+  }
+}
+
+/**
  * Clone a bot repository
  */
 function cloneRepo(botId, repoUrl, branch = 'main') {
@@ -157,6 +236,9 @@ function cloneRepo(botId, repoUrl, branch = 'main') {
       throw new Error(`Failed to clone repository: ${e.message}`);
     }
   }
+
+  // Apply novaspark.config.json hints (entry_point, session_dir, etc.)
+  applyBotConfig(botId, botDir);
 
   // Write env vars into config files (settings.js, config.env, etc.) for bots that don't read process.env
   const bot = Bots.findById(botId);
@@ -274,6 +356,125 @@ function writeConfigFiles(botId, botDir, bot) {
   } catch (e) {
     BotLogs.add(botId, 'warn', `Failed to write .env: ${e.message}`);
   }
+
+  // Pattern 4: config/config.js or lib/config.js (module.exports = { KEY: "value" })
+  const nestedConfigs = [
+    path.join(botDir, 'config', 'config.js'),
+    path.join(botDir, 'lib', 'config.js'),
+    path.join(botDir, 'src', 'config.js'),
+    path.join(botDir, 'config.js'),
+  ];
+  for (const cfgPath of nestedConfigs) {
+    if (fs.existsSync(cfgPath)) {
+      try {
+        const original = fs.readFileSync(cfgPath, 'utf8');
+        let modified = original;
+        for (const [key, value] of Object.entries(envVars)) {
+          const regex = new RegExp(`(${key}\\s*:\\s*)(['"\`])([^'"\`]*)\\2`, 'g');
+          if (regex.test(modified)) {
+            modified = modified.replace(
+              new RegExp(`(${key}\\s*:\\s*)(['"\`])([^'"\`]*)\\2`, 'g'),
+              `$1$2${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}$2`
+            );
+          }
+        }
+        if (modified !== original) {
+          fs.writeFileSync(cfgPath, modified, 'utf8');
+          BotLogs.add(botId, 'info', `Wrote config to ${path.relative(botDir, cfgPath)}`);
+        }
+      } catch (e) {
+        BotLogs.add(botId, 'warn', `Failed to write ${path.relative(botDir, cfgPath)}: ${e.message}`);
+      }
+    }
+  }
+
+  // Pattern 5: novaspark.config.json declares a custom config_file — write there too
+  const nsCfg = readBotConfig(botDir);
+  if (nsCfg.config_file && nsCfg.config_format) {
+    const customPath = path.join(botDir, nsCfg.config_file);
+    if (fs.existsSync(customPath)) {
+      try {
+        const original = fs.readFileSync(customPath, 'utf8');
+        let modified = original;
+        for (const [key, value] of Object.entries(envVars)) {
+          const regex = new RegExp(`(${key}\\s*:\\s*)(['"\`])([^'"\`]*)\\2`, 'g');
+          if (regex.test(modified)) {
+            modified = modified.replace(
+              new RegExp(`(${key}\\s*:\\s*)(['"\`])([^'"\`]*)\\2`, 'g'),
+              `$1$2${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}$2`
+            );
+          }
+        }
+        if (modified !== original) {
+          fs.writeFileSync(customPath, modified, 'utf8');
+          BotLogs.add(botId, 'info', `Wrote config to custom config_file: ${nsCfg.config_file}`);
+        }
+      } catch (e) {
+        BotLogs.add(botId, 'warn', `Failed to write custom config_file: ${e.message}`);
+      }
+    }
+  }
+}
+
+/**
+ * Session persistence helpers — backup and restore WhatsApp auth session folders.
+ * Many bots use auth_info_baileys/, session/, .session/, or a custom folder.
+ */
+const SESSIONS_DIR = path.join(__dirname, '..', '..', 'data', 'sessions');
+if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+
+function getSessionDir(bot, botDir) {
+  // Check novaspark.config.json first, then DB field, then fallback scan
+  const nsCfg = readBotConfig(botDir);
+  if (nsCfg.session_dir) return path.join(botDir, nsCfg.session_dir);
+  if (bot.session_dir) return path.join(botDir, bot.session_dir);
+
+  // Auto-detect common session folder names
+  const candidates = ['auth_info_baileys', 'session', '.session', 'auth', 'baileys_auth_info', 'sessions'];
+  for (const name of candidates) {
+    const p = path.join(botDir, name);
+    if (fs.existsSync(p)) return p;
+  }
+  // Default to auth_info_baileys (most common Baileys default)
+  return path.join(botDir, 'auth_info_baileys');
+}
+
+function restoreSession(botId, botDir, bot) {
+  const sessionBackup = path.join(SESSIONS_DIR, `${botId}.json`);
+  if (!fs.existsSync(sessionBackup)) return;
+
+  const targetDir = getSessionDir(bot, botDir);
+  try {
+    const files = JSON.parse(fs.readFileSync(sessionBackup, 'utf8'));
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+    for (const [filename, content] of Object.entries(files)) {
+      fs.writeFileSync(path.join(targetDir, filename), content, 'utf8');
+    }
+    BotLogs.add(botId, 'info', `Restored WhatsApp session (${Object.keys(files).length} files) — bot should connect without QR scan`);
+  } catch (e) {
+    BotLogs.add(botId, 'warn', `Session restore failed: ${e.message}`);
+  }
+}
+
+function backupSession(botId, botDir, bot) {
+  const targetDir = getSessionDir(bot, botDir);
+  if (!fs.existsSync(targetDir)) return;
+
+  try {
+    const files = {};
+    const entries = fs.readdirSync(targetDir);
+    for (const entry of entries) {
+      const entryPath = path.join(targetDir, entry);
+      const stat = fs.statSync(entryPath);
+      // Only backup files, not subdirs; skip large files (>500KB)
+      if (stat.isFile() && stat.size < 512 * 1024) {
+        files[entry] = fs.readFileSync(entryPath, 'utf8');
+      }
+    }
+    if (Object.keys(files).length > 0) {
+      fs.writeFileSync(path.join(SESSIONS_DIR, `${botId}.json`), JSON.stringify(files), 'utf8');
+    }
+  } catch (_) {}
 }
 
 /**
@@ -289,6 +490,9 @@ function startBot(botId) {
     if (!bot.repo_url) throw new Error('No repository configured');
     cloneRepo(botId, bot.repo_url, bot.branch || 'main');
   }
+
+  // Restore saved WhatsApp session (avoids QR scan on restart)
+  restoreSession(botId, botDir, bot);
 
   // Always write config files on start (in case env vars were updated)
   writeConfigFiles(botId, botDir, bot);
@@ -339,9 +543,20 @@ function startBot(botId) {
   // Capture stdout (wrapped in try/catch — bot stdout should NEVER crash the platform)
   proc.stdout.on('data', (data) => {
     try {
-      const lines = data.toString().split('\n').filter(l => l.trim());
+      const raw = data.toString();
+      const lines = raw.split('\n').filter(l => l.trim());
       for (const line of lines) {
+        // Detect base64 QR codes (Baileys outputs data:image/png;base64,... to stdout)
+        if (line.includes('data:image/png;base64,')) {
+          const match = line.match(/(data:image\/png;base64,[A-Za-z0-9+/=]+)/);
+          if (match) {
+            BotLogs.add(botId, 'info', '[QR CODE] Scan this QR code in WhatsApp to connect your bot');
+            broadcastBotQR(bot.owner_id, botId, match[1]);
+            continue;
+          }
+        }
         BotLogs.add(botId, 'info', line.slice(0, 500));
+        broadcastBotLog(bot.owner_id, botId, 'info', line.slice(0, 500));
       }
     } catch (_) { /* swallow */ }
   });
@@ -349,11 +564,29 @@ function startBot(botId) {
   // Capture stderr (filter noise, wrapped in try/catch)
   proc.stderr.on('data', (data) => {
     try {
-      const lines = data.toString().split('\n').filter(l => l.trim());
+      const raw = data.toString();
+      const lines = raw.split('\n').filter(l => l.trim());
       for (const line of lines) {
+        // Detect ASCII QR art (block characters) in stderr
+        if (QR_PATTERNS[1].test(line)) {
+          // It's a QR code ASCII art line — log it but don't broadcast as error
+          BotLogs.add(botId, 'info', line.slice(0, 500));
+          broadcastBotLog(bot.owner_id, botId, 'qr', line.slice(0, 500));
+          continue;
+        }
+        // Detect base64 QR in stderr too
+        if (line.includes('data:image/png;base64,')) {
+          const match = line.match(/(data:image\/png;base64,[A-Za-z0-9+/=]+)/);
+          if (match) {
+            BotLogs.add(botId, 'info', '[QR CODE] Scan this QR code in WhatsApp to connect your bot');
+            broadcastBotQR(bot.owner_id, botId, match[1]);
+            continue;
+          }
+        }
         const isNoise = NOISE_PATTERNS.some(p => p.test(line));
         if (!isNoise) {
           BotLogs.add(botId, 'error', line.slice(0, 500));
+          broadcastBotLog(bot.owner_id, botId, 'error', line.slice(0, 500));
         }
       }
     } catch (_) { /* swallow */ }
@@ -374,9 +607,13 @@ function startBot(botId) {
     const currentRestartCount = record.restartCount;
     const currentBackoffMs = record.backoffMs;
 
+    // Backup session before marking as crashed (preserve auth across restarts)
+    try { backupSession(botId, botDir, bot); } catch (_) {}
+
     processes.delete(botId);
     const reason = signal ? `signal ${signal}` : `code ${code}`;
     BotLogs.add(botId, 'warn', `Process exited (${reason})`);
+    broadcastBotStatus(bot.owner_id, botId, 'crashed', { reason });
 
     // Update DB
     Bots.update(botId, { status: 'crashed', pid: null });
@@ -415,6 +652,7 @@ function startBot(botId) {
   });
 
   BotLogs.add(botId, 'info', `Bot started (PID: ${proc.pid})`);
+  broadcastBotStatus(bot.owner_id, botId, 'running', { pid: proc.pid });
   return { pid: proc.pid, status: 'running' };
 }
 
@@ -443,6 +681,8 @@ function stopBot(botId) {
   processes.delete(botId);
   Bots.update(botId, { status: 'stopped', pid: null });
   BotLogs.add(botId, 'info', 'Bot stopped by user');
+  const stoppedBot = Bots.findById(botId);
+  if (stoppedBot) broadcastBotStatus(stoppedBot.owner_id, botId, 'stopped');
 
   return { status: 'stopped' };
 }
@@ -559,6 +799,7 @@ module.exports = {
   deleteBotFiles,
   startWatchdog,
   stopWatchdog,
+  setWsBroadcast,
   processes,
   BOTS_DIR
 };
