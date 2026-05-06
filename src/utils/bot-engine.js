@@ -154,6 +154,33 @@ function patchBrokenDeps(botId, botDir) {
     BotLogs.add(botId, 'info', 'Patched broken git dependencies (dead repos replaced with working forks)');
   }
 
+  // Strip known malicious / non-existent packages from the bot's package.json
+  // xsqlite3 is a fake package (not on npm) used in supply-chain attacks.
+  // Its deeply-nested core0/core1/.../coreN structure causes ERR_MODULE_NOT_FOUND crashes.
+  const MALICIOUS_PACKAGES = ['xsqlite3'];
+  const pkgPathM = path.join(botDir, 'package.json');
+  if (fs.existsSync(pkgPathM)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPathM, 'utf8'));
+      let stripped = false;
+      for (const bad of MALICIOUS_PACKAGES) {
+        for (const section of ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']) {
+          if (pkg[section] && pkg[section][bad]) {
+            delete pkg[section][bad];
+            stripped = true;
+            BotLogs.add(botId, 'warn', `⚠️ Removed malicious/fake package "${bad}" from ${section}`);
+          }
+        }
+      }
+      if (stripped) {
+        fs.writeFileSync(pkgPathM, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+        BotLogs.add(botId, 'info', 'Saved cleaned package.json (malicious packages removed)');
+      }
+    } catch (e) {
+      BotLogs.add(botId, 'warn', `Failed to strip malicious packages: ${e.message}`);
+    }
+  }
+
   // IMPORTANT: The broken dep comes from angularsockets (a baileys fork).
   // npm resolves transitive deps from the registry first, THEN tries git deps.
   // We need to add an npm override to force the replacement at install time
