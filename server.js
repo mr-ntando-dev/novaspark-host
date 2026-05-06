@@ -274,6 +274,14 @@ cron.schedule('*/5 * * * *', async () => {
   } catch (_) {}
 });
 
+// Every 10 min: run disk watchdog to prevent disk full
+cron.schedule('*/10 * * * *', () => {
+  try {
+    const { runDiskWatchdog } = require('./src/utils/storage-manager');
+    runDiskWatchdog();
+  } catch (_) {}
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // START SERVER
 // ─────────────────────────────────────────────────────────────────────────────

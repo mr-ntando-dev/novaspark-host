@@ -211,4 +211,27 @@ router.get('/audit-log', (req, res) => {
   res.json({ logs });
 });
 
+// ─── STORAGE INFO ────────────────────────────────────────────────────────────
+router.get('/storage', (req, res) => {
+  try {
+    const { getFullStorageInfo, cleanupStoppedBots } = require('../utils/storage-manager');
+    const info = getFullStorageInfo();
+    res.json(info);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── FORCE CLEANUP ───────────────────────────────────────────────────────────
+router.post('/storage/cleanup', (req, res) => {
+  try {
+    const { cleanupStoppedBots, getFullStorageInfo } = require('../utils/storage-manager');
+    const result = cleanupStoppedBots();
+    const info = getFullStorageInfo();
+    res.json({ ...result, storage: info, message: `Evicted ${result.evicted} stopped bot(s), freed ${Math.round(result.freed_bytes / 1024 / 1024)}MB` });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

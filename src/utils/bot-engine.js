@@ -11,6 +11,12 @@ const { spawn, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { Bots, BotLogs, Notifications, Users } = require('../database');
+const {
+  backupSessionToDb,
+  restoreSessionFromDb,
+  evictBotFromDisk,
+  runDiskWatchdog
+} = require('./storage-manager');
 
 const BOTS_DIR = path.join(__dirname, '..', '..', 'data', 'bots');
 if (!fs.existsSync(BOTS_DIR)) fs.mkdirSync(BOTS_DIR, { recursive: true });
@@ -560,11 +566,17 @@ function startBot(botId) {
   if (!bot) throw new Error('Bot not found');
   if (processes.has(botId)) throw new Error('Bot already running');
 
+  // Run disk watchdog before starting — free space if needed
+  try { runDiskWatchdog(); } catch (_) {}
+
   const botDir = path.join(BOTS_DIR, botId);
   if (!fs.existsSync(botDir)) {
     if (!bot.repo_url) throw new Error('No repository configured');
     cloneRepo(botId, bot.repo_url, bot.branch || 'main');
   }
+
+  // Restore session from internal DB storage (in case folder was evicted)
+  try { restoreSessionFromDb(botId); } catch (_) {}
 
   // Restore saved WhatsApp session (avoids QR scan on restart)
   restoreSession(botId, botDir, bot);
@@ -712,6 +724,8 @@ function startBot(botId) {
 
     // Backup session before marking as crashed (preserve auth across restarts)
     try { backupSession(botId, botDir, bot); } catch (_) {}
+    // Also backup to internal DB storage (survives disk eviction)
+    try { backupSessionToDb(botId); } catch (_) {}
 
     processes.delete(botId);
     const reason = signal ? `signal ${signal}` : `code ${code}`;
@@ -784,17 +798,24 @@ function stopBot(botId) {
   const bot = Bots.findById(botId);
   record.restartCount = BOT_MAX_RESTARTS; // prevent auto-restart on kill
 
+  // Backup session to internal DB before killing (preserves WhatsApp auth)
+  try { backupSessionToDb(botId); } catch (_) {}
+
   try {
     record.proc.kill('SIGTERM');
-    // Force kill after 5s
+    // Force kill after 5s, then evict folder to free disk
     setTimeout(() => {
       try { record.proc.kill('SIGKILL'); } catch (_) {}
+      // Evict bot folder from disk after process is fully dead (free space)
+      setTimeout(() => {
+        try { evictBotFromDisk(botId); } catch (_) {}
+      }, 2000);
     }, 5000);
   } catch (_) {}
 
   processes.delete(botId);
   Bots.update(botId, { status: 'stopped', pid: null });
-  BotLogs.add(botId, 'info', 'Bot stopped by user');
+  BotLogs.add(botId, 'info', 'Bot stopped by user (session saved, folder will be cleaned)');
   const stoppedBot = Bots.findById(botId);
   if (stoppedBot) broadcastBotStatus(stoppedBot.owner_id, botId, 'stopped');
 

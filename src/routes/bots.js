@@ -4,6 +4,7 @@ const { Router } = require('express');
 const { Bots, BotLogs, Users, Notifications, Backups } = require('../database');
 const { authenticate } = require('../middleware/auth');
 const { startBot, stopBot, restartBot, getBotInfo, cloneRepo, deleteBotFiles } = require('../utils/bot-engine');
+const { clearSessionFromDb } = require('../utils/storage-manager');
 const { Alerts } = require('../utils/discord-alerts');
 const AdmZip = require('adm-zip');
 const path = require('path');
@@ -415,6 +416,9 @@ router.delete('/:id/session', authenticate, (req, res) => {
       Bots.update(req.params.id, { env_vars: JSON.stringify(envVars) });
     }
   } catch (_) {}
+
+  // Also clear session from internal DB storage
+  try { clearSessionFromDb(req.params.id); } catch (_) {}
 
   BotLogs.add(req.params.id, 'info', 'Session cleared — bot will require fresh QR scan on next start');
 
