@@ -1626,13 +1626,14 @@ async function renderAnomaly() {
     if (bots.length === 0) { document.getElementById('anomaly-content').innerHTML = '<p class="text-gray-400">No bots found.</p>'; return; }
     let html = '';
     for (const bot of bots) {
-      let summary = { alerts: [], metrics: {} };
-      try { summary = await api(`/api/anomaly/${bot.id}/summary`); } catch (_) {}
-      const alerts = summary.alerts || [];
+      let summary = { active: [], resolved: [] };
+      try { summary = await api(`/api/anomaly/${bot.id}/alerts`); } catch (_) {}
+      const alerts = [...(summary.active || []), ...(summary.resolved || [])];
       const alertHtml = alerts.length > 0
         ? alerts.slice(0, 5).map(a => `<div class="flex items-start gap-3 p-3 rounded-lg ${a.severity === 'high' ? 'bg-red-500/10 border border-red-500/20' : a.severity === 'medium' ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-blue-500/10 border border-blue-500/20'}"><i class="ri-alert-line ${a.severity === 'high' ? 'text-red-400' : a.severity === 'medium' ? 'text-yellow-400' : 'text-blue-400'} mt-0.5"></i><div><p class="text-sm text-white font-medium">${a.type}</p><p class="text-xs text-gray-400">${a.message}</p><p class="text-xs text-gray-500 mt-1">${new Date(a.detectedAt).toLocaleString()}</p></div><span class="ml-auto text-xs px-2 py-0.5 rounded ${a.resolved ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">${a.resolved ? 'Resolved' : 'Active'}</span></div>`).join('')
         : '<p class="text-gray-500 text-sm">No anomalies detected.</p>';
-      html += `<div class="glass p-5 rounded-xl mb-4"><div class="flex items-center justify-between mb-4"><h3 class="text-white font-semibold">${bot.name}</h3><span class="text-xs px-2 py-1 rounded-full ${alerts.filter(a=>!a.resolved).length > 0 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}">${alerts.filter(a=>!a.resolved).length > 0 ? alerts.filter(a=>!a.resolved).length + ' active alerts' : 'Healthy'}</span></div><div class="space-y-2">${alertHtml}</div></div>`;
+      const activeCount = (summary.active || []).length;
+      html += `<div class="glass p-5 rounded-xl mb-4"><div class="flex items-center justify-between mb-4"><h3 class="text-white font-semibold">${bot.name}</h3><span class="text-xs px-2 py-1 rounded-full ${activeCount > 0 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}">${activeCount > 0 ? activeCount + ' active alerts' : 'Healthy'}</span></div><div class="space-y-2">${alertHtml}</div></div>`;
     }
     document.getElementById('anomaly-content').innerHTML = html;
   } catch (e) { document.getElementById('anomaly-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
@@ -1686,7 +1687,7 @@ async function renderPlugins() {
   try {
     const botsData = await api('/api/bots');
     const bots = botsData.bots || [];
-    const builtins = await api('/api/plugins/builtins');
+    const builtins = await api('/api/plugins/available');
     const buildinList = builtins.plugins || [];
     let html = '';
     if (bots.length === 0) { document.getElementById('plugins-content').innerHTML = '<p class="text-gray-400">Deploy a bot first.</p>'; return; }
@@ -1776,7 +1777,7 @@ async function showCreatePipelineModal() {
     .then(() => { toast('Pipeline created!', 'success'); renderPipelines(); })
     .catch(e => toast(e.message, 'error'));
 }
-function triggerPipeline(id) { api(`/api/pipelines/${id}/trigger`, { method: 'POST' }).then(d => { toast(`Pipeline started (run ${d.run_id || ''})`, 'success'); setTimeout(renderPipelines, 1000); }).catch(e => toast(e.message, 'error')); }
+function triggerPipeline(id) { api(`/api/pipelines/${id}/run`, { method: 'POST' }).then(d => { toast(`Pipeline started (run ${d.run_id || ''})`, 'success'); setTimeout(renderPipelines, 1000); }).catch(e => toast(e.message, 'error')); }
 function deletePipeline(id) { if (!confirm('Delete this pipeline?')) return; api(`/api/pipelines/${id}`, { method: 'DELETE' }).then(() => { toast('Pipeline deleted', 'info'); renderPipelines(); }).catch(e => toast(e.message, 'error')); }
 
 // ─── V13: STATUS PAGES ───────────────────────────────────────────────────────
@@ -1819,20 +1820,20 @@ async function renderQuotas() {
   const el = document.getElementById('page-content');
   el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-2"><i class="ri-pie-chart-2-line mr-2"></i>Resource Quotas</h2><p class="text-gray-400 text-sm mb-6">Per-plan CPU, RAM, and storage limits with real-time usage metering.</p><div id="quotas-content"><p class="text-gray-400">Loading quotas...</p></div></div>`;
   try {
-    const data = await api('/api/quotas/my');
-    const q = data.quotas || {};
+    const data = await api('/api/quotas/usage');
+    const limits = data.limits || {};
     const usage = data.usage || {};
-    function pct(used, limit) { if (!limit) return 0; return Math.min(100, Math.round((used / limit) * 100)); }
+    function pct(u) { return u && u.percent ? Math.min(100, parseFloat(u.percent)) : 0; }
     function bar(p) { const color = p > 85 ? 'bg-red-500' : p > 60 ? 'bg-yellow-500' : 'bg-brand-500'; return `<div class="w-full bg-white/10 rounded-full h-2"><div class="${color} h-2 rounded-full transition-all" style="width:${p}%"></div></div>`; }
     const html = `
       <div class="glass p-5 rounded-xl mb-4"><p class="text-xs text-gray-400 uppercase mb-1">Plan</p><p class="text-2xl font-bold text-white capitalize">${data.plan || 'free'}</p></div>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">Bots</p><p class="text-xl font-bold text-white mb-2">${usage.bots || 0} / ${q.max_bots || '∞'}</p>${bar(pct(usage.bots, q.max_bots))}</div>
-        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">RAM</p><p class="text-xl font-bold text-white mb-2">${usage.ram_mb || 0} MB / ${q.max_ram_mb || '∞'} MB</p>${bar(pct(usage.ram_mb, q.max_ram_mb))}</div>
-        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">Storage</p><p class="text-xl font-bold text-white mb-2">${usage.storage_mb || 0} MB / ${q.max_storage_mb || '∞'} MB</p>${bar(pct(usage.storage_mb, q.max_storage_mb))}</div>
-        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">Team Members</p><p class="text-xl font-bold text-white mb-2">${usage.team_members || 0} / ${q.max_team_members || '∞'}</p>${bar(pct(usage.team_members, q.max_team_members))}</div>
-        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">Webhooks</p><p class="text-xl font-bold text-white mb-2">${usage.webhooks || 0} / ${q.max_webhooks || '∞'}</p>${bar(pct(usage.webhooks, q.max_webhooks))}</div>
-        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">Schedulers</p><p class="text-xl font-bold text-white mb-2">${usage.schedulers || 0} / ${q.max_schedulers || '∞'}</p>${bar(pct(usage.schedulers, q.max_schedulers))}</div>
+        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">Bots</p><p class="text-xl font-bold text-white mb-2">${(usage.bots||{}).used||0} / ${limits.max_bots||'∞'}</p>${bar(pct(usage.bots))}</div>
+        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">RAM</p><p class="text-xl font-bold text-white mb-2">${(usage.ram_mb||{}).used||0} MB / ${limits.max_ram_mb||'∞'} MB</p>${bar(pct(usage.ram_mb))}</div>
+        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">Storage</p><p class="text-xl font-bold text-white mb-2">${(usage.storage_mb||{}).used||0} MB / ${limits.max_storage_mb||'∞'} MB</p>${bar(pct(usage.storage_mb))}</div>
+        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">Bandwidth</p><p class="text-xl font-bold text-white mb-2">${(usage.bandwidth_gb||{}).used||0} GB / ${limits.max_bandwidth_gb||'∞'} GB</p>${bar(pct(usage.bandwidth_gb))}</div>
+        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">Deploys Today</p><p class="text-xl font-bold text-white mb-2">${(usage.deploys_today||{}).used||0} / ${limits.max_deploys_per_day||'∞'}</p>${bar(pct(usage.deploys_today))}</div>
+        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">Terminal Access</p><p class="text-xl font-bold ${data.features&&data.features.terminal_access ? 'text-green-400' : 'text-red-400'} mb-2">${data.features&&data.features.terminal_access ? 'Enabled' : 'Upgrade required'}</p></div>
       </div>`;
     document.getElementById('quotas-content').innerHTML = html;
   } catch (e) { document.getElementById('quotas-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
@@ -1848,30 +1849,44 @@ async function renderRateLimiter() {
     if (bots.length === 0) { document.getElementById('ratelimiter-content').innerHTML = '<p class="text-gray-400">Deploy a bot first.</p>'; return; }
     let html = '';
     for (const bot of bots) {
-      let config = { rules: [] };
-      try { config = await api(`/api/rate-limiter/${bot.id}`); } catch (_) {}
-      const rules = config.rules || [];
-      html += `<div class="glass p-5 rounded-xl mb-4"><div class="flex items-center justify-between mb-4"><h3 class="text-white font-semibold">${bot.name}</h3><button onclick="addRateLimitRule('${bot.id}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 rounded text-xs text-white transition"><i class="ri-add-line"></i> Add Rule</button></div>`;
-      if (rules.length === 0) {
-        html += '<p class="text-gray-500 text-sm">No rate limit rules set. Bot uses platform defaults.</p>';
-      } else {
-        html += '<div class="space-y-2">' + rules.map(r => `<div class="flex items-center justify-between p-3 rounded-lg bg-white/5"><div><p class="text-sm text-white">${r.action || 'message'} — max ${r.max_requests} / ${r.window_seconds}s</p><p class="text-xs text-gray-400">${r.scope || 'per-user'} · On exceed: ${r.on_exceed || 'block'}</p></div><button onclick="deleteRateLimitRule('${bot.id}','${r.id}')" class="text-red-400 hover:text-red-300 text-xs">Remove</button></div>`).join('') + '</div>';
-      }
-      html += '</div>';
+      let cfg = { config: {} };
+      try { cfg = await api(`/api/rate-limiter/${bot.id}/config`); } catch (_) {}
+      const c = cfg.config || {};
+      html += `<div class="glass p-5 rounded-xl mb-4">
+        <div class="flex items-center justify-between mb-4"><h3 class="text-white font-semibold">${bot.name}</h3></div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div class="glass p-3 rounded-lg"><p class="text-xs text-gray-400">Req/min</p><p class="text-lg font-bold text-white">${c.requests_per_minute || 60}</p></div>
+          <div class="glass p-3 rounded-lg"><p class="text-xs text-gray-400">Burst</p><p class="text-lg font-bold text-white">${c.burst_limit || 10}</p></div>
+          <div class="glass p-3 rounded-lg"><p class="text-xs text-gray-400">Block duration</p><p class="text-lg font-bold text-white">${c.block_duration_minutes || 15}m</p></div>
+          <div class="glass p-3 rounded-lg"><p class="text-xs text-gray-400">DDoS protection</p><p class="text-lg font-bold ${c.enable_ddos_protection ? 'text-green-400' : 'text-gray-400'}">${c.enable_ddos_protection ? 'On' : 'Off'}</p></div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="editRateLimitConfig('${bot.id}', ${c.requests_per_minute||60}, ${c.burst_limit||10}, ${c.block_duration_minutes||15})" class="px-3 py-1.5 bg-brand-500/20 hover:bg-brand-500/30 text-brand-400 rounded text-xs border border-brand-500/30 transition">Edit Config</button>
+          <button onclick="viewRateLimitStats('${bot.id}')" class="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded text-xs border border-white/10 transition">View Stats</button>
+        </div>
+      </div>`;
     }
     document.getElementById('ratelimiter-content').innerHTML = html;
   } catch (e) { document.getElementById('ratelimiter-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
 }
-function addRateLimitRule(botId) {
-  const maxReq = prompt('Max requests (e.g. 10):');
-  if (!maxReq) return;
-  const windowSec = prompt('Window in seconds (e.g. 60):') || '60';
-  const onExceed = prompt('Action on exceed (block / warn / slow):') || 'block';
-  api(`/api/rate-limiter/${botId}/rules`, { method: 'POST', body: { max_requests: parseInt(maxReq), window_seconds: parseInt(windowSec), scope: 'per-user', on_exceed: onExceed } })
-    .then(() => { toast('Rule added!', 'success'); renderRateLimiter(); })
+function editRateLimitConfig(botId, rpm, burst, blockMin) {
+  const newRpm = prompt('Max requests per minute:', rpm);
+  if (newRpm === null) return;
+  const newBurst = prompt('Burst limit (short spike allowance):', burst);
+  if (newBurst === null) return;
+  const newBlock = prompt('Block duration (minutes) after violation:', blockMin);
+  if (newBlock === null) return;
+  api(`/api/rate-limiter/${botId}/config`, { method: 'POST', body: { requests_per_minute: parseInt(newRpm), burst_limit: parseInt(newBurst), block_duration_minutes: parseInt(newBlock), enable_ddos_protection: true } })
+    .then(() => { toast('Rate limit config saved!', 'success'); renderRateLimiter(); })
     .catch(e => toast(e.message, 'error'));
 }
-function deleteRateLimitRule(botId, ruleId) { if (!confirm('Remove this rule?')) return; api(`/api/rate-limiter/${botId}/rules/${ruleId}`, { method: 'DELETE' }).then(() => { toast('Rule removed', 'info'); renderRateLimiter(); }).catch(e => toast(e.message, 'error')); }
+async function viewRateLimitStats(botId) {
+  try {
+    const data = await api(`/api/rate-limiter/${botId}/stats`);
+    const msg = `Requests last min: ${data.current_rate?.per_minute || 0}\nRequests last hour: ${data.current_rate?.per_hour || 0}\nBlocked IPs: ${data.blocked_ips || 0}\nActive connections: ${data.active_connections || 0}`;
+    alert(msg);
+  } catch (e) { toast(e.message, 'error'); }
+}
 
 // ─── V13: REGIONS ────────────────────────────────────────────────────────────
 async function renderRegions() {
@@ -1897,8 +1912,8 @@ function assignBotRegion() {
   const botId = document.getElementById('region-bot-select')?.value;
   const regionId = document.getElementById('region-select')?.value;
   if (!botId || !regionId) return;
-  api(`/api/regions/${regionId}/assign`, { method: 'POST', body: { bot_id: botId } })
-    .then(() => { toast('Bot assigned to region!', 'success'); renderRegions(); })
+  api(`/api/regions/${botId}/deploy`, { method: 'POST', body: { region: regionId, is_primary: false } })
+    .then(() => { toast('Bot deploying to region!', 'success'); renderRegions(); })
     .catch(e => toast(e.message, 'error'));
 }
 

@@ -352,6 +352,21 @@ server.listen(PORT, async () => {
   console.log('');
 
   await bootstrapAdmin();
+
+  // Reset any bots left in 'running' state from before the server restarted.
+  // After a restart all processes are dead — marking them stopped prevents the
+  // disk watchdog from confusing "running" (DB) with actually-running processes.
+  try {
+    const db = getDb();
+    const stale = db.prepare("SELECT id, name FROM bots WHERE status = 'running'").all();
+    if (stale.length > 0) {
+      db.prepare("UPDATE bots SET status = 'stopped', pid = NULL WHERE status = 'running'").run();
+      console.log(chalk.yellow(`[Boot] Reset ${stale.length} stale running bot(s) to stopped.`));
+    }
+  } catch (e) {
+    console.error('[Boot] Failed to reset stale bot statuses:', e.message);
+  }
+
   startWatchdog();
 
   // Initialize scheduled tasks from DB
