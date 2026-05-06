@@ -294,40 +294,8 @@ server.listen(PORT, async () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GRACEFUL SHUTDOWN
-// Render sends SIGTERM before killing the container. We need to:
-//  1. Stop accepting new connections
-//  2. Stop the watchdog (prevents spurious "process dead" errors on shutdown)
-//  3. Let in-flight requests drain (30s timeout)
-// Without this, Render marks the deploy as crashed and restarts immediately.
+// GRACEFUL SHUTDOWN (handled below with existing SIGTERM handler)
 // ─────────────────────────────────────────────────────────────────────────────
-const { stopWatchdog } = require('./src/utils/bot-engine');
-
-function gracefulShutdown(signal) {
-  console.log(chalk.yellow(`\n[Shutdown] Received ${signal} — shutting down gracefully...`));
-  stopWatchdog();
-  server.close(() => {
-    console.log(chalk.yellow('[Shutdown] HTTP server closed. Exiting.'));
-    process.exit(0);
-  });
-  // Force exit after 30s if drain takes too long
-  setTimeout(() => {
-    console.error('[Shutdown] Drain timeout — forcing exit.');
-    process.exit(1);
-  }, 30000).unref();
-}
-
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
-
-// Catch unhandled rejections — log them but do NOT crash the platform
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[UnhandledRejection]', reason);
-});
-process.on('uncaughtException', (err) => {
-  console.error('[UncaughtException]', err.message, err.stack);
-  // Don't exit — the platform must stay up even if a single operation throws
-});
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
