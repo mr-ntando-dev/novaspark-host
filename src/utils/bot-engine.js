@@ -21,7 +21,33 @@ const {
 const BOTS_DIR = path.join(__dirname, '..', '..', 'data', 'bots');
 if (!fs.existsSync(BOTS_DIR)) fs.mkdirSync(BOTS_DIR, { recursive: true });
 
-// In-memory process registry
+// ─── MALICIOUS / FAKE PACKAGES ────────────────────────────────────────────────
+// xsqlite3 is a non-existent npm package injected by supply-chain attacks.
+// Its deeply-nested core0/.../coreN structure causes ERR_MODULE_NOT_FOUND on
+// every launch. We must physically delete it from node_modules before starting.
+const MALICIOUS_PACKAGES = ['xsqlite3'];
+
+/**
+ * Physically remove known malicious packages from a bot's node_modules directory.
+ * Called at every bot start — catches already-installed packages that slipped
+ * through the package.json stripper (e.g. installed in a previous deploy).
+ */
+function purgeMaliciousModules(botId, botDir) {
+  const nmDir = path.join(botDir, 'node_modules');
+  if (!fs.existsSync(nmDir)) return;
+  for (const pkg of MALICIOUS_PACKAGES) {
+    const pkgDir = path.join(nmDir, pkg);
+    if (fs.existsSync(pkgDir)) {
+      try {
+        fs.rmSync(pkgDir, { recursive: true, force: true });
+        BotLogs.add(botId, 'warn', `⚠️ Purged malicious package "${pkg}" from node_modules`);
+      } catch (e) {
+        BotLogs.add(botId, 'warn', `Failed to purge "${pkg}": ${e.message}`);
+      }
+    }
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 const processes = new Map(); // botId -> { proc, restartCount, lastRestart, backoffMs }
 
 const BOT_WATCHDOG_INTERVAL = parseInt(process.env.BOT_WATCHDOG_INTERVAL_MS) || 120000;
@@ -616,6 +642,10 @@ function startBot(botId) {
   if (!fs.existsSync(entryPath)) {
     throw new Error(`Entry point not found: ${entryPoint}`);
   }
+
+  // Purge malicious packages from node_modules before every launch
+  // (catches packages already on disk from previous deploys)
+  try { purgeMaliciousModules(botId, botDir); } catch (_) {}
 
   // Parse env vars
   let envVars = {};
