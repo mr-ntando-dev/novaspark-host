@@ -73,14 +73,32 @@ function cloneRepo(botId, repoUrl, branch = 'main') {
   const pkgPath = path.join(botDir, 'package.json');
   if (fs.existsSync(pkgPath)) {
     const yarnLock = path.join(botDir, 'yarn.lock');
+
+    // Force git to use HTTPS instead of SSH (many bot deps reference private GitHub repos via SSH)
+    try {
+      execSync('git config --global url."https://github.com/".insteadOf ssh://git@github.com/', { timeout: 5000, stdio: 'pipe' });
+      execSync('git config --global url."https://github.com/".insteadOf git@github.com:', { timeout: 5000, stdio: 'pipe' });
+    } catch (_) {}
+
     const installCmd = fs.existsSync(yarnLock)
       ? `cd "${botDir}" && npx yarn install --network-concurrency 1 --ignore-engines`
-      : `cd "${botDir}" && npm install --production`;
+      : `cd "${botDir}" && npm install --production --legacy-peer-deps`;
     try {
-      execSync(installCmd, { timeout: 180000, stdio: 'pipe' });
+      execSync(installCmd, { timeout: 300000, stdio: 'pipe' });
       BotLogs.add(botId, 'info', `Dependencies installed (${fs.existsSync(yarnLock) ? 'yarn' : 'npm'})`);
     } catch (e) {
-      BotLogs.add(botId, 'warn', `Install warning: ${e.message}`);
+      // If install fails, try once more without --production (some bots need devDeps for build)
+      BotLogs.add(botId, 'warn', `First install attempt failed: ${e.message.slice(0, 200)}`);
+      try {
+        const retryCmd = fs.existsSync(yarnLock)
+          ? `cd "${botDir}" && npx yarn install --ignore-engines`
+          : `cd "${botDir}" && npm install --legacy-peer-deps --force`;
+        execSync(retryCmd, { timeout: 300000, stdio: 'pipe' });
+        BotLogs.add(botId, 'info', 'Dependencies installed (retry succeeded)');
+      } catch (e2) {
+        BotLogs.add(botId, 'error', `Install failed: ${e2.message.slice(0, 300)}`);
+        throw new Error(`Failed to install dependencies: ${e2.message.slice(0, 200)}`);
+      }
     }
   }
 
