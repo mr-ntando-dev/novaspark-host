@@ -266,9 +266,10 @@ function applyBotConfig(botId, botDir) {
     // Store session_dir so startBot knows which folder to treat as persistent
     updates.session_dir = cfg.session_dir;
   }
-  if (cfg.auto_restart !== undefined && bot.auto_restart === 1) {
-    updates.auto_restart = cfg.auto_restart ? 1 : 0;
-  }
+  // Auto-restart is globally disabled — ignore config file's auto_restart setting
+  // if (cfg.auto_restart !== undefined && bot.auto_restart === 1) {
+  //   updates.auto_restart = cfg.auto_restart ? 1 : 0;
+  // }
   if (cfg.max_ram_mb && !bot.max_ram_mb) {
     updates.max_ram_mb = cfg.max_ram_mb;
   }
@@ -792,39 +793,9 @@ function startBot(botId) {
     // Update DB
     Bots.update(botId, { status: 'crashed', pid: null });
 
-    // Auto-restart logic — use captured values so backoff actually grows
-    const freshBot = Bots.findById(botId);
-
-    // Rapid-crash detection: if bot crashed 5+ times in under 2 minutes, stop restarting
-    const rapidCrashLimit = 5;
-    const uptime = Date.now() - (record.lastRestart || 0);
-    if (currentRestartCount >= rapidCrashLimit && uptime < 120000) {
-      BotLogs.add(botId, 'error', `Bot crashed ${currentRestartCount + 1} times in ${Math.round(uptime / 1000)}s — stopping auto-restart. Check logs and clear session if error 440.`);
-      broadcastBotStatus(bot.owner_id, botId, 'crashed', { reason: 'Rapid crash loop detected — auto-restart disabled' });
-      Bots.update(botId, { auto_restart: 0 });
-      return;
-    }
-
-    if (freshBot && freshBot.auto_restart && currentRestartCount < BOT_MAX_RESTARTS) {
-      const backoff = Math.min(currentBackoffMs * Math.pow(1.5, currentRestartCount), BOT_RESTART_BACKOFF_MAX);
-      BotLogs.add(botId, 'info', `Auto-restarting in ${Math.round(backoff / 1000)}s (attempt ${currentRestartCount + 1})`);
-
-      setTimeout(() => {
-        try {
-          startBot(botId);
-          const newRecord = processes.get(botId);
-          if (newRecord) {
-            // Carry forward the restart count and a grown backoff so it keeps escalating
-            newRecord.restartCount = currentRestartCount + 1;
-            newRecord.backoffMs = backoff;
-          }
-          Bots.update(botId, { total_restarts: (freshBot.total_restarts || 0) + 1 });
-        } catch (e) {
-          BotLogs.add(botId, 'error', `Auto-restart failed: ${e.message}`);
-          Bots.update(botId, { status: 'crashed' });
-        }
-      }, backoff);
-    }
+    // Auto-restart DISABLED — bots never restart on their own.
+    // If a bot crashes, it stays crashed until manually started by the user.
+    BotLogs.add(botId, 'info', 'Auto-restart is disabled. Start the bot manually when ready.');
   });
 
   // Update DB

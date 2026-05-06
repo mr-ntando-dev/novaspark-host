@@ -83,7 +83,7 @@ function initSchema(db) {
       port              INTEGER DEFAULT NULL,
       start_time        TEXT DEFAULT NULL,
       paid_until        TEXT DEFAULT NULL,
-      auto_restart      INTEGER NOT NULL DEFAULT 1,
+      auto_restart      INTEGER NOT NULL DEFAULT 0,
       restart_count     INTEGER NOT NULL DEFAULT 0,
       max_ram_mb        INTEGER NOT NULL DEFAULT 512,
       last_health_check TEXT DEFAULT NULL,
@@ -471,7 +471,7 @@ const Bots = {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, data.owner_id, data.name, data.description || '', data.repo_url || null,
       data.branch || 'main', data.entry_point || 'index.js', data.server_tier || 'basic',
-      JSON.stringify(data.env_vars || {}), data.auto_restart !== undefined ? data.auto_restart : 1);
+      JSON.stringify(data.env_vars || {}), data.auto_restart !== undefined ? data.auto_restart : 0);
     return this.findById(id);
   },
 

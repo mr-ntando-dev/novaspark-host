@@ -488,7 +488,7 @@ function renderDeploy() {
             <div><label class="text-sm text-gray-400 block mb-1">Max RAM (MB)</label><input type="number" id="d-maxram" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="512" min="128" max="4096"></div>
           </div>
           <div class="flex items-center gap-3">
-            <input type="checkbox" id="d-autorestart" checked class="w-4 h-4 rounded bg-white/5 border-white/10 text-brand-500 focus:ring-brand-500">
+            <input type="checkbox" id="d-autorestart" class="w-4 h-4 rounded bg-white/5 border-white/10 text-brand-500 focus:ring-brand-500">
             <label for="d-autorestart" class="text-sm text-gray-300">Auto-restart on crash</label>
           </div>
           <div><label class="text-sm text-gray-400 block mb-1">Install Command (override)</label><input type="text" id="d-install-cmd" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none font-mono text-sm" placeholder="npm install --production (default)"></div>
@@ -835,7 +835,7 @@ async function handleDeploy(e) {
     branch: document.getElementById('d-branch').value || 'main',
     entry_point: document.getElementById('d-entry').value || 'index.js',
     env_vars: envVars,
-    auto_restart: document.getElementById('d-autorestart') ? (document.getElementById('d-autorestart').checked ? 1 : 0) : 1,
+    auto_restart: document.getElementById('d-autorestart') ? (document.getElementById('d-autorestart').checked ? 1 : 0) : 0,
     server_tier: document.getElementById('d-tier') ? document.getElementById('d-tier').value : 'basic'
   };
 
@@ -1117,7 +1117,7 @@ async function handleAdminInstallBot(e, templateId) {
     branch: t.branch,
     entry_point: document.getElementById('install-entry').value.trim() || t.entry,
     env_vars: envVars,
-    auto_restart: 1,
+    auto_restart: 0,
     server_tier: 'basic'
   };
 

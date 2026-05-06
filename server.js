@@ -436,10 +436,10 @@ process.on('uncaughtException', (err) => {
   }
   _uncaughtCount++;
   if (_uncaughtCount >= MAX_CRASHES_PER_WINDOW) {
-    console.error(chalk.red(`[Fatal] ${MAX_CRASHES_PER_WINDOW} uncaught exceptions in ${CRASH_WINDOW_MS/1000}s — force restarting.`));
-    process.exit(1); // Let process manager (Render/pm2) restart us
+    console.error(chalk.red(`[Fatal] ${MAX_CRASHES_PER_WINDOW} uncaught exceptions in ${CRASH_WINDOW_MS/1000}s — but NOT restarting (auto-restart disabled).`));
+    // Do NOT call process.exit — keep the server alive no matter what
   }
-  // Otherwise: swallow and keep running
+  // Swallow and keep running
 });
 
 process.on('unhandledRejection', (reason, promise) => {
