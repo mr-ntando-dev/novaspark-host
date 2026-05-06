@@ -50,11 +50,12 @@ function purgeMaliciousModules(botId, botDir) {
 // ─────────────────────────────────────────────────────────────────────────────
 const processes = new Map(); // botId -> { proc, restartCount, lastRestart, backoffMs }
 
-const BOT_WATCHDOG_INTERVAL = parseInt(process.env.BOT_WATCHDOG_INTERVAL_MS) || 120000;
-const BOT_MAX_RAM_MB = parseInt(process.env.BOT_MAX_RAM_MB) || 512;
+const BOT_WATCHDOG_INTERVAL = parseInt(process.env.BOT_WATCHDOG_INTERVAL_MS) || 30000; // 30s — check more often
+const BOT_MAX_RAM_MB = parseInt(process.env.BOT_MAX_RAM_MB) || 128; // Conservative: leave room for the platform itself
 const BOT_RESTART_BACKOFF_BASE = 15000; // 15s minimum — prevents 440 session collisions
 const BOT_RESTART_BACKOFF_MAX = 5 * 60 * 1000;
 const BOT_MAX_RESTARTS = 9999;
+const BOT_RAM_KILL_THRESHOLD_MB = parseInt(process.env.BOT_RAM_KILL_THRESHOLD_MB) || 150; // Kill bot if RSS exceeds this
 
 // Fatal WhatsApp errors that should STOP auto-restart (restarting makes them worse)
 const FATAL_WA_PATTERNS = [
@@ -903,7 +904,8 @@ function getRunningBots() {
 }
 
 /**
- * Watchdog — check all running bots
+ * Watchdog — check all running bots for health AND memory usage.
+ * Kills bots that exceed their RAM limit to protect the platform from OOM.
  * NOTE: Only marks bots as dead if the exit event hasn't already handled it.
  * We do NOT trigger auto-restart here — the exit handler owns that logic.
  * This prevents double-restart races.
@@ -913,6 +915,29 @@ function runWatchdog() {
     try {
       // Check if process is still alive (signal 0 = existence check only)
       process.kill(record.proc.pid, 0);
+
+      // Check memory usage of the bot process — kill it if exceeding threshold
+      try {
+        const pidStatPath = `/proc/${record.proc.pid}/status`;
+        if (fs.existsSync(pidStatPath)) {
+          const stat = fs.readFileSync(pidStatPath, 'utf8');
+          const rssMatch = stat.match(/VmRSS:\s+(\d+)\s+kB/);
+          if (rssMatch) {
+            const rssMB = parseInt(rssMatch[1]) / 1024;
+            if (rssMB > BOT_RAM_KILL_THRESHOLD_MB) {
+              BotLogs.add(botId, 'error', `Bot killed by watchdog: using ${Math.round(rssMB)}MB RAM (limit: ${BOT_RAM_KILL_THRESHOLD_MB}MB). Media commands (play, download) use too much memory.`);
+              const bot = Bots.findById(botId);
+              if (bot) broadcastBotStatus(bot.owner_id, botId, 'killed', { reason: `OOM protection: ${Math.round(rssMB)}MB used` });
+              record.restartCount = BOT_MAX_RESTARTS; // prevent restart
+              try { record.proc.kill('SIGKILL'); } catch (_) {}
+              processes.delete(botId);
+              Bots.update(botId, { status: 'crashed', pid: null, health_status: 'oom_killed' });
+              continue;
+            }
+          }
+        }
+      } catch (_) { /* /proc may not be available on all platforms — skip memory check */ }
+
       Bots.update(botId, { last_health_check: new Date().toISOString(), health_status: 'healthy' });
     } catch (e) {
       // Process is dead but exit event may not have fired yet — just clean up state.

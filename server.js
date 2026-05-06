@@ -286,22 +286,33 @@ cron.schedule('0 3 * * *', () => {
   console.log(chalk.blue(`[Cron] Maintenance complete. ${expiringSoon.length} expiring, ${expired.length} downgraded.`));
 });
 
-// Every 2 min: memory pressure relief
+// Every 15s: aggressive memory pressure relief — kill bots before platform OOMs
 setInterval(() => {
   try {
     const mem = process.memoryUsage();
     const heapUsedMB = Math.round(mem.heapUsed / 1024 / 1024);
     const rssMB = Math.round(mem.rss / 1024 / 1024);
-    if (heapUsedMB > 400) {
-      console.warn(chalk.yellow(`[Memory] High heap usage: ${heapUsedMB}MB — attempting GC hint`));
+
+    if (rssMB > 350) {
+      // Platform is using too much RAM — kill all running bots to survive
+      console.error(chalk.red(`[Memory] CRITICAL: Platform RSS at ${rssMB}MB — killing all bots to prevent OOM`));
+      const { processes: botProcesses, stopBot } = require('./src/utils/bot-engine');
+      for (const [botId, record] of botProcesses) {
+        try {
+          record.restartCount = 9999; // prevent restart
+          record.proc.kill('SIGKILL');
+          botProcesses.delete(botId);
+          Bots.update(botId, { status: 'crashed', pid: null });
+          BotLogs.add(botId, 'error', 'Bot killed: platform memory critical. Reduce bot memory usage (avoid play/download commands).');
+        } catch (_) {}
+      }
       if (global.gc) global.gc();
-    }
-    if (rssMB > 900) {
-      console.error(chalk.red(`[Memory] RSS dangerously high: ${rssMB}MB — forcing GC`));
+    } else if (heapUsedMB > 250) {
+      console.warn(chalk.yellow(`[Memory] High heap usage: ${heapUsedMB}MB — attempting GC`));
       if (global.gc) global.gc();
     }
   } catch (_) {}
-}, 120000);
+}, 15000);
 
 // Every 5 min: broadcast system stats via WebSocket
 cron.schedule('*/5 * * * *', async () => {

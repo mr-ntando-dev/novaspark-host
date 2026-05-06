@@ -4,7 +4,7 @@
   "description": "NovaSpark V13 — Advanced Bot Hosting Platform. Live Terminal, AI Anomaly Detection, Event Bus, Plugin System, Secret Vault, CI/CD Pipelines, Status Pages, Resource Quotas, Rate Limiter, Geo Regions, Analytics, Teams, Scheduler, Marketplace, Webhooks, Custom Domains, Backups, Versioning, Process Isolation, Real-time Dashboard, Coin Economy, Stripe-ready Billing.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node --expose-gc --max-old-space-size=384 server.js",
     "dev": "nodemon server.js"
   },
   "dependencies": {

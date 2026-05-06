@@ -3,7 +3,7 @@ services:
     name: novaspark-v11
     runtime: node
     buildCommand: npm install --production --omit=dev
-    startCommand: node server.js
+    startCommand: node --expose-gc --max-old-space-size=384 server.js
     plan: free
     healthCheckPath: /api/health
     autoDeploy: true
@@ -30,6 +30,8 @@ services:
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
       - key: BOT_MAX_RAM_MB
-        value: "512"
+        value: "128"
+      - key: BOT_RAM_KILL_THRESHOLD_MB
+        value: "150"
       - key: MAX_BOTS_GLOBAL
         value: "100"
