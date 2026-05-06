@@ -77,13 +77,19 @@ app.get('/api/health', (req, res) => {
 
 // ─── GLOBAL ERROR HANDLER (prevents server crash on unhandled route errors) ──
 app.use((err, req, res, _next) => {
-  console.error('[Express Error]', err.stack || err.message || err);
-  if (res.headersSent) return;
-  res.status(err.status || 500).json({
-    error: process.env.NODE_ENV === 'production'
-      ? 'Internal server error'
-      : err.message || 'Internal server error'
-  });
+  try {
+    console.error('[Express Error]', err.stack || err.message || err);
+    if (res.headersSent) return;
+    res.status(err.status || 500).json({
+      error: process.env.NODE_ENV === 'production'
+        ? 'Internal server error'
+        : err.message || 'Internal server error'
+    });
+  } catch (handlerErr) {
+    // Even the error handler crashed — still don't bring down the server
+    console.error('[Express Error Handler Failure]', handlerErr);
+    try { res.status(500).end(); } catch (_) {}
+  }
 });
 
 // Catch-all: serve index.html for SPA routes
@@ -102,9 +108,18 @@ const wsClients = new Map(); // userId -> Set<ws>
 
 wss.on('connection', (ws, req) => {
   let userId = null;
+  let msgCount = 0;
+  const msgResetInterval = setInterval(() => { msgCount = 0; }, 10000);
 
   ws.on('message', (msg) => {
     try {
+      // Rate limit: max 30 messages per 10 seconds per connection
+      msgCount++;
+      if (msgCount > 30) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Rate limited' }));
+        return;
+      }
+
       const data = JSON.parse(msg);
       if (data.type === 'auth' && data.userId) {
         userId = data.userId;
@@ -116,13 +131,16 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => {
+    clearInterval(msgResetInterval);
     if (userId && wsClients.has(userId)) {
       wsClients.get(userId).delete(ws);
       if (wsClients.get(userId).size === 0) wsClients.delete(userId);
     }
   });
 
-  ws.on('error', () => {});
+  ws.on('error', () => {
+    clearInterval(msgResetInterval);
+  });
 });
 
 // Broadcast to specific user
@@ -217,6 +235,23 @@ cron.schedule('0 3 * * *', () => {
   console.log(chalk.blue(`[Cron] Maintenance complete. ${expiringSoon.length} expiring, ${expired.length} downgraded.`));
 });
 
+// Every 2 min: memory pressure relief
+setInterval(() => {
+  try {
+    const mem = process.memoryUsage();
+    const heapUsedMB = Math.round(mem.heapUsed / 1024 / 1024);
+    const rssMB = Math.round(mem.rss / 1024 / 1024);
+    if (heapUsedMB > 400) {
+      console.warn(chalk.yellow(`[Memory] High heap usage: ${heapUsedMB}MB — attempting GC hint`));
+      if (global.gc) global.gc();
+    }
+    if (rssMB > 900) {
+      console.error(chalk.red(`[Memory] RSS dangerously high: ${rssMB}MB — forcing GC`));
+      if (global.gc) global.gc();
+    }
+  } catch (_) {}
+}, 120000);
+
 // Every 5 min: broadcast system stats via WebSocket
 cron.schedule('*/5 * * * *', async () => {
   try {
@@ -270,11 +305,39 @@ process.on('SIGTERM', () => {
   server.close(() => process.exit(0));
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// BULLETPROOF CRASH PROTECTION — server should NEVER go down
+// ─────────────────────────────────────────────────────────────────────────────
+let _uncaughtCount = 0;
+const CRASH_WINDOW_MS = 60000;
+const MAX_CRASHES_PER_WINDOW = 20;
+let _crashWindowStart = Date.now();
+
 process.on('uncaughtException', (err) => {
-  console.error(chalk.red('[Fatal]'), err);
+  console.error(chalk.red('[UncaughtException]'), err.stack || err.message || err);
   Alerts.systemAlert(`Uncaught exception: ${err.message}`);
+
+  // Track crash frequency — only force-exit if truly spiraling
+  const now = Date.now();
+  if (now - _crashWindowStart > CRASH_WINDOW_MS) {
+    _uncaughtCount = 0;
+    _crashWindowStart = now;
+  }
+  _uncaughtCount++;
+  if (_uncaughtCount >= MAX_CRASHES_PER_WINDOW) {
+    console.error(chalk.red(`[Fatal] ${MAX_CRASHES_PER_WINDOW} uncaught exceptions in ${CRASH_WINDOW_MS/1000}s — force restarting.`));
+    process.exit(1); // Let process manager (Render/pm2) restart us
+  }
+  // Otherwise: swallow and keep running
 });
 
-process.on('unhandledRejection', (reason) => {
-  console.error(chalk.red('[Rejection]'), reason);
+process.on('unhandledRejection', (reason, promise) => {
+  console.error(chalk.red('[UnhandledRejection]'), reason);
+  // Never crash on unhandled promise rejections
+});
+
+// Prevent V8 from killing the process on memory warnings
+process.on('warning', (warning) => {
+  if (warning.name === 'MaxListenersExceededWarning') return; // harmless
+  console.warn(chalk.yellow(`[Warning] ${warning.name}: ${warning.message}`));
 });

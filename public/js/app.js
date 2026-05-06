@@ -128,6 +128,7 @@ function navigate(page) {
     case 'dashboard': renderDashboard(); break;
     case 'bots': renderBots(); break;
     case 'deploy': renderDeploy(); break;
+    case 'templates': renderTemplatesPage(); break;
     case 'economy': renderEconomy(); break;
     case 'leaderboard': renderLeaderboard(); break;
     case 'notifications': renderNotifications(); break;
@@ -278,6 +279,14 @@ let _deployRepoTimeout = null;
 
 function renderDeploy() {
   document.getElementById('page-content').innerHTML = `<div class="space-y-6"><h2 class="text-2xl font-bold text-white">Deploy a Bot</h2>
+
+    <!-- Bot Templates Section -->
+    <div class="glass rounded-xl p-6">
+      <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2"><i class="ri-apps-2-line text-brand-400"></i> Quick Deploy Templates</h3>
+      <p class="text-sm text-gray-400 mb-4">Select a pre-configured bot to auto-fill the deploy form, or scroll down to deploy a custom repo.</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" id="bot-templates-grid"></div>
+    </div>
+
     <form id="deploy-form" class="glass rounded-xl p-6 space-y-5 max-w-2xl">
       <div><label class="text-sm text-gray-400 block mb-1">GitHub Repo URL *</label>
         <div class="relative">
@@ -293,10 +302,23 @@ function renderDeploy() {
         <div><label class="text-sm text-gray-400 block mb-1">Entry Point</label><input type="text" id="d-entry" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="index.js"></div>
       </div>
 
+      <!-- WhatsApp Session Credentials (prominent) -->
+      <div class="border border-brand-500/30 rounded-xl p-4 bg-brand-500/5">
+        <h4 class="text-sm font-semibold text-brand-400 mb-3 flex items-center gap-2"><i class="ri-whatsapp-line"></i> WhatsApp Session Credentials</h4>
+        <p class="text-xs text-gray-400 mb-3">Required for WhatsApp bots. Get your Session ID from the bot's pairing process.</p>
+        <div class="space-y-3">
+          <div><label class="text-sm text-gray-400 block mb-1">Session ID *</label><input type="text" id="d-session-id" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none font-mono text-sm" placeholder="e.g. SUBZERO~abc123 or levanter_xyz"></div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="text-sm text-gray-400 block mb-1">Owner Number</label><input type="text" id="d-owner-number" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" placeholder="e.g. 263786831091"></div>
+            <div><label class="text-sm text-gray-400 block mb-1">Prefix</label><input type="text" id="d-prefix" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" placeholder="." value="."></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Environment Variables -->
       <div>
         <div class="flex items-center justify-between mb-2">
-          <label class="text-sm text-gray-400">Environment Variables</label>
+          <label class="text-sm text-gray-400">Additional Environment Variables</label>
           <button type="button" onclick="addEnvRow()" class="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"><i class="ri-add-line"></i> Add Variable</button>
         </div>
         <div id="env-rows" class="space-y-2"></div>
@@ -332,6 +354,9 @@ function renderDeploy() {
       <button type="submit" id="deploy-btn" class="w-full bg-gradient-to-r from-brand-500 to-purple-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition flex items-center justify-center gap-2"><i class="ri-rocket-2-line"></i> Deploy Bot</button>
     </form></div>`;
 
+  // Render bot templates
+  renderBotTemplates();
+
   // Bind form submit
   document.getElementById('deploy-form').addEventListener('submit', handleDeploy);
   // Bind repo URL change for auto-config
@@ -344,6 +369,193 @@ function renderDeploy() {
     clearTimeout(_deployRepoTimeout);
     _deployRepoTimeout = setTimeout(() => scanRepoConfig(), 500);
   });
+}
+
+// ─── BOT TEMPLATES ───────────────────────────────────────────────────────────
+const BOT_TEMPLATES = [
+  {
+    id: 'novaspark',
+    name: 'NovaSpark Bot',
+    description: 'WhatsApp MD Bot - 130+ commands, AI, games, economy',
+    repo: 'https://github.com/mr-ntando-dev/NovaSpark-Bot',
+    branch: 'main',
+    entry: 'index.js',
+    icon: '⚡',
+    color: 'from-indigo-500 to-purple-500',
+    env_keys: ['SESSION_ID', 'OWNER_NUMBER', 'PREFIX', 'OPENAI_API_KEY'],
+    session_key: 'SESSION_ID',
+    owner_key: 'OWNER_NUMBER',
+    prefix_key: 'PREFIX',
+    default_prefix: '.'
+  },
+  {
+    id: 'subzero',
+    name: 'Subzero MD',
+    description: 'World Best WhatsApp Bot - Made in Uganda by Lucky 218',
+    repo: 'https://github.com/subzero-md/SUBZERO-DM',
+    branch: 'main',
+    entry: 'index.js',
+    icon: '🧊',
+    color: 'from-cyan-500 to-blue-500',
+    env_keys: ['SESSION_ID', 'OWNER_NUMBER', 'PREFIX'],
+    session_key: 'SESSION_ID',
+    owner_key: 'OWNER_NUMBER',
+    prefix_key: 'PREFIX',
+    default_prefix: '.'
+  },
+  {
+    id: 'levanter',
+    name: 'Levanter',
+    description: 'Feature-rich WhatsApp bot supporting multiple sessions',
+    repo: 'https://github.com/lyfe00011/levanter',
+    branch: 'main',
+    entry: 'index.js',
+    icon: '🌿',
+    color: 'from-green-500 to-emerald-500',
+    env_keys: ['SESSION_ID', 'VPS', 'AUTO_UPDATE'],
+    session_key: 'SESSION_ID',
+    owner_key: null,
+    prefix_key: null,
+    default_prefix: '.'
+  },
+  {
+    id: 'silva-md',
+    name: 'Silva MD Bot',
+    description: 'Smart WhatsApp bot - motivation, media downloads, polls',
+    repo: 'https://github.com/SilvaTechB/silva-md-bot',
+    branch: 'main',
+    entry: 'silva.js',
+    icon: '🦊',
+    color: 'from-orange-500 to-red-500',
+    env_keys: ['SESSION_ID', 'PREFIX', 'OWNER_NUMBER'],
+    session_key: 'SESSION_ID',
+    owner_key: 'OWNER_NUMBER',
+    prefix_key: 'PREFIX',
+    default_prefix: '.'
+  },
+  {
+    id: 'queen-anya',
+    name: 'Queen Anya v3',
+    description: 'Modular WhatsApp plugins bot powered by Baileys',
+    repo: 'https://github.com/PikaBotz/AnyaBotV3',
+    branch: 'main',
+    entry: 'index.js',
+    icon: '👑',
+    color: 'from-pink-500 to-rose-500',
+    env_keys: ['SESSION_ID', 'OWNER_NUMBER'],
+    session_key: 'SESSION_ID',
+    owner_key: 'OWNER_NUMBER',
+    prefix_key: null,
+    default_prefix: '.'
+  },
+  {
+    id: 'chatunity',
+    name: 'ChatUnity Bot',
+    description: 'Multilingual WhatsApp bot - ranked among the best globally',
+    repo: 'https://github.com/chatunitycenter/chatunity-bot',
+    branch: 'main',
+    entry: 'main.js',
+    icon: '🌍',
+    color: 'from-yellow-500 to-amber-500',
+    env_keys: ['SESSION_ID', 'OWNER_NUMBER', 'PREFIX'],
+    session_key: 'SESSION_ID',
+    owner_key: 'OWNER_NUMBER',
+    prefix_key: 'PREFIX',
+    default_prefix: '.'
+  }
+];
+
+function renderTemplatesPage() {
+  document.getElementById('page-content').innerHTML = `<div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-2xl font-bold text-white">Bot Templates</h2>
+        <p class="text-sm text-gray-400 mt-1">Pre-configured WhatsApp bots ready to deploy. Just add your Session ID.</p>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="templates-page-grid"></div>
+  </div>`;
+
+  const grid = document.getElementById('templates-page-grid');
+  grid.innerHTML = BOT_TEMPLATES.map(t => `
+    <div class="glass rounded-xl p-5 hover:border-brand-500/40 border border-white/10 transition-all group">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="w-12 h-12 rounded-xl bg-gradient-to-br ${t.color} flex items-center justify-center text-2xl shadow-lg">${t.icon}</div>
+        <div class="flex-1 min-w-0">
+          <h3 class="text-base font-bold text-white truncate">${t.name}</h3>
+          <p class="text-xs text-gray-400 font-mono">${t.repo.replace('https://github.com/', '')}</p>
+        </div>
+      </div>
+      <p class="text-sm text-gray-300 mb-3">${t.description}</p>
+      <div class="flex flex-wrap gap-1 mb-4">
+        <span class="text-[10px] px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/20">WhatsApp MD</span>
+        <span class="text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">Baileys</span>
+        <span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">Node.js</span>
+      </div>
+      <div class="text-xs text-gray-500 mb-3">
+        <span class="font-medium text-gray-400">Required:</span> ${t.env_keys.map(k => '<code class="text-brand-300">' + k + '</code>').join(', ')}
+      </div>
+      <button onclick="selectBotTemplate('${t.id}'); navigate('deploy');" class="w-full bg-gradient-to-r ${t.color} text-white py-2 rounded-lg text-sm font-medium hover:opacity-90 transition flex items-center justify-center gap-2">
+        <i class="ri-rocket-2-line"></i> Deploy ${t.name}
+      </button>
+    </div>
+  `).join('');
+}
+
+function renderBotTemplates() {
+  const grid = document.getElementById('bot-templates-grid');
+  if (!grid) return;
+  grid.innerHTML = BOT_TEMPLATES.map(t => `
+    <div class="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-brand-500/40 rounded-xl p-4 cursor-pointer transition-all group" onclick="selectBotTemplate('${t.id}')">
+      <div class="flex items-center gap-3 mb-2">
+        <div class="w-10 h-10 rounded-lg bg-gradient-to-br ${t.color} flex items-center justify-center text-xl shadow-lg">${t.icon}</div>
+        <div class="flex-1 min-w-0">
+          <h4 class="text-sm font-bold text-white truncate group-hover:text-brand-300 transition">${t.name}</h4>
+        </div>
+      </div>
+      <p class="text-xs text-gray-400 line-clamp-2">${t.description}</p>
+      <div class="mt-2 flex items-center gap-1">
+        <span class="text-[10px] px-1.5 py-0.5 rounded bg-brand-500/10 text-brand-400 border border-brand-500/20">WhatsApp</span>
+        <span class="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20">Baileys</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectBotTemplate(templateId) {
+  const t = BOT_TEMPLATES.find(b => b.id === templateId);
+  if (!t) return;
+
+  // Auto-fill the deploy form
+  document.getElementById('d-repo').value = t.repo;
+  document.getElementById('d-name').value = t.name;
+  document.getElementById('d-desc').value = t.description;
+  document.getElementById('d-branch').value = t.branch;
+  document.getElementById('d-entry').value = t.entry;
+  document.getElementById('d-prefix').value = t.default_prefix;
+
+  // Clear session fields so user can fill them
+  document.getElementById('d-session-id').value = '';
+  document.getElementById('d-owner-number').value = '';
+
+  // Clear existing env rows and add template-specific ones (excluding session/owner/prefix which have dedicated fields)
+  const container = document.getElementById('env-rows');
+  container.innerHTML = '';
+  const dedicatedKeys = [t.session_key, t.owner_key, t.prefix_key].filter(Boolean);
+  for (const key of t.env_keys) {
+    if (!dedicatedKeys.includes(key)) {
+      addEnvRow(key, '', '', false);
+    }
+  }
+
+  // Scroll to session ID field and highlight it
+  const sessionField = document.getElementById('d-session-id');
+  sessionField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  sessionField.focus();
+  sessionField.classList.add('border-brand-500');
+  setTimeout(() => sessionField.classList.remove('border-brand-500'), 2000);
+
+  toast(`${t.name} template loaded. Fill in your Session ID to deploy.`, 'success');
 }
 
 function toggleAdvancedDeploy() {
@@ -448,13 +660,22 @@ async function handleDeploy(e) {
   btn.disabled = true;
   btn.innerHTML = '<i class="ri-loader-4-line animate-spin"></i> Creating bot...';
 
+  // Collect all env vars including session credentials
+  const envVars = collectEnvVars();
+  const sessionId = document.getElementById('d-session-id').value.trim();
+  const ownerNumber = document.getElementById('d-owner-number').value.trim();
+  const prefix = document.getElementById('d-prefix').value.trim();
+  if (sessionId) envVars['SESSION_ID'] = sessionId;
+  if (ownerNumber) envVars['OWNER_NUMBER'] = ownerNumber;
+  if (prefix) envVars['PREFIX'] = prefix;
+
   const body = {
     name,
     description: document.getElementById('d-desc').value,
     repo_url: repoUrl,
     branch: document.getElementById('d-branch').value || 'main',
     entry_point: document.getElementById('d-entry').value || 'index.js',
-    env_vars: collectEnvVars(),
+    env_vars: envVars,
     auto_restart: document.getElementById('d-autorestart') ? (document.getElementById('d-autorestart').checked ? 1 : 0) : 1,
     server_tier: document.getElementById('d-tier') ? document.getElementById('d-tier').value : 'basic'
   };
@@ -635,71 +856,129 @@ async function sendBroadcast(e) { if (e && e.preventDefault) e.preventDefault();
 function renderAdminInstallBot() {
   const el = document.getElementById('page-content');
   el.innerHTML = `<div class="space-y-6"><h2 class="text-2xl font-bold text-white">Admin: Install Bot</h2>
-    <div class="glass rounded-xl p-6">
-      <div class="flex items-center gap-4 mb-6">
-        <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-brand-500 to-purple-500 flex items-center justify-center">
-          <i class="ri-robot-2-line text-white text-2xl"></i>
-        </div>
-        <div>
-          <h3 class="text-xl font-bold text-white">NovaSpark Bot</h3>
-          <p class="text-sm text-gray-400">WhatsApp MD AutoChat Bot with 130+ commands</p>
-        </div>
-      </div>
-      <p class="text-gray-300 text-sm mb-4">Deploy the official NovaSpark WhatsApp Bot directly from GitHub. Features include AI chat, stickers, TTS, news, trivia, XP system, coin economy, slow mode, anti-media, and much more.</p>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <div class="bg-white/5 rounded-lg p-3 text-center"><p class="text-brand-400 font-bold text-lg">130+</p><p class="text-xs text-gray-400">Commands</p></div>
-        <div class="bg-white/5 rounded-lg p-3 text-center"><p class="text-green-400 font-bold text-lg">v9.0</p><p class="text-xs text-gray-400">Version</p></div>
-        <div class="bg-white/5 rounded-lg p-3 text-center"><p class="text-purple-400 font-bold text-lg">Node 20+</p><p class="text-xs text-gray-400">Runtime</p></div>
-        <div class="bg-white/5 rounded-lg p-3 text-center"><p class="text-yellow-400 font-bold text-lg">Baileys</p><p class="text-xs text-gray-400">Engine</p></div>
-      </div>
-      <div class="border-t border-white/5 pt-4">
-        <h4 class="text-sm font-semibold text-white mb-3">Deploy Configuration</h4>
-        <form onsubmit="handleInstallNovaSpark(event)" class="space-y-4">
-          <div><label class="text-sm text-gray-400 block mb-1">Bot Name</label><input type="text" id="install-name" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="NovaSpark Bot" required></div>
-          <div><label class="text-sm text-gray-400 block mb-1">Description</label><input type="text" id="install-desc" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="WhatsApp MD AutoChat Bot - 130+ commands, AI, games, economy"></div>
-          <div class="grid grid-cols-2 gap-4">
-            <div><label class="text-sm text-gray-400 block mb-1">Branch</label><input type="text" id="install-branch" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="main"></div>
-            <div><label class="text-sm text-gray-400 block mb-1">Entry Point</label><input type="text" id="install-entry" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="index.js"></div>
-          </div>
-          <div class="bg-white/5 rounded-lg p-3 flex items-center gap-3">
-            <i class="ri-github-fill text-xl text-gray-300"></i>
-            <div class="flex-1">
-              <p class="text-sm text-white font-mono">mr-ntando-dev/NovaSpark-Bot</p>
-              <p class="text-xs text-gray-400">https://github.com/mr-ntando-dev/NovaSpark-Bot</p>
-            </div>
-          </div>
-          <div class="border-t border-white/5 pt-4">
-            <div class="flex items-center justify-between mb-2">
-              <label class="text-sm text-gray-400">Environment Variables</label>
-              <button type="button" onclick="addInstallEnvRow()" class="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"><i class="ri-add-line"></i> Add Variable</button>
-            </div>
-            <div id="install-env-rows" class="space-y-2">
-              <!-- Prefill common NovaSpark bot vars -->
-            </div>
-            <p class="text-xs text-gray-500 mt-2"><i class="ri-lock-line"></i> Injected securely at runtime — never exposed in logs.</p>
-          </div>
-          <button type="submit" id="install-btn" class="w-full bg-gradient-to-r from-brand-500 to-purple-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition flex items-center justify-center gap-2"><i class="ri-install-line"></i> Install & Deploy NovaSpark Bot</button>
-        </form>
-      </div>
-    </div>
-    <div class="glass rounded-xl p-6">
-      <h3 class="font-semibold text-white mb-3">Features</h3>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-300">
-        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> AI Chat & Smart Detection</div>
-        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> Sticker Creation (image/video)</div>
-        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> Text-to-Speech (TTS)</div>
-        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> News & RSS Feeds</div>
-        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> Trivia, Wordle, Hangman</div>
-        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> XP & Level System</div>
-        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> Coin Economy</div>
-        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> Night Mode & Anti-Toxic</div>
-        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> Ghost Mode & VIP Mode</div>
-        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> TikTok & YouTube Downloads</div>
-        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> Chess & Akinator Games</div>
-        <div class="flex items-center gap-2"><i class="ri-check-line text-green-400"></i> Pin Board & Timetable</div>
-      </div>
-    </div>
+    <p class="text-gray-400 text-sm">Quick-deploy any supported bot template for a user. Select a bot below, fill in session credentials, and deploy.</p>
+
+    <!-- Bot selector tabs -->
+    <div class="flex flex-wrap gap-2 mb-4" id="admin-bot-tabs"></div>
+
+    <!-- Dynamic bot install form -->
+    <div id="admin-install-content" class="glass rounded-xl p-6"></div>
   </div>`;
+
+  // Render bot tabs
+  const tabsEl = document.getElementById('admin-bot-tabs');
+  tabsEl.innerHTML = BOT_TEMPLATES.map((t, i) => `
+    <button onclick="selectAdminBotTemplate('${t.id}')" class="admin-bot-tab px-4 py-2 rounded-lg text-sm font-medium transition border ${i === 0 ? 'bg-brand-500/20 border-brand-500/40 text-brand-300' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white hover:border-white/20'}" data-bot="${t.id}">
+      ${t.icon} ${t.name}
+    </button>
+  `).join('');
+
+  // Select first bot by default
+  selectAdminBotTemplate(BOT_TEMPLATES[0].id);
+}
+
+function selectAdminBotTemplate(templateId) {
+  const t = BOT_TEMPLATES.find(b => b.id === templateId);
+  if (!t) return;
+
+  // Update active tab styling
+  document.querySelectorAll('.admin-bot-tab').forEach(tab => {
+    if (tab.dataset.bot === templateId) {
+      tab.className = 'admin-bot-tab px-4 py-2 rounded-lg text-sm font-medium transition border bg-brand-500/20 border-brand-500/40 text-brand-300';
+    } else {
+      tab.className = 'admin-bot-tab px-4 py-2 rounded-lg text-sm font-medium transition border bg-white/5 border-white/10 text-gray-400 hover:text-white hover:border-white/20';
+    }
+  });
+
+  const content = document.getElementById('admin-install-content');
+  content.innerHTML = `
+    <div class="flex items-center gap-4 mb-6">
+      <div class="w-14 h-14 rounded-xl bg-gradient-to-br ${t.color} flex items-center justify-center text-2xl shadow-lg">${t.icon}</div>
+      <div>
+        <h3 class="text-xl font-bold text-white">${t.name}</h3>
+        <p class="text-sm text-gray-400">${t.description}</p>
+      </div>
+    </div>
+    <div class="bg-white/5 rounded-lg p-3 flex items-center gap-3 mb-4">
+      <i class="ri-github-fill text-xl text-gray-300"></i>
+      <div class="flex-1">
+        <p class="text-sm text-white font-mono">${t.repo.replace('https://github.com/','')}</p>
+        <p class="text-xs text-gray-400">${t.repo}</p>
+      </div>
+    </div>
+    <form onsubmit="handleAdminInstallBot(event, '${t.id}')" class="space-y-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div><label class="text-sm text-gray-400 block mb-1">Bot Name</label><input type="text" id="install-name" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="${t.name}" required></div>
+        <div><label class="text-sm text-gray-400 block mb-1">Entry Point</label><input type="text" id="install-entry" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="${t.entry}"></div>
+      </div>
+      <!-- Session Credentials -->
+      <div class="border border-brand-500/30 rounded-xl p-4 bg-brand-500/5">
+        <h4 class="text-sm font-semibold text-brand-400 mb-3 flex items-center gap-2"><i class="ri-whatsapp-line"></i> WhatsApp Session Credentials</h4>
+        <div class="space-y-3">
+          <div><label class="text-sm text-gray-400 block mb-1">Session ID *</label><input type="text" id="install-session-id" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none font-mono text-sm" placeholder="Paste your session ID here" required></div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="text-sm text-gray-400 block mb-1">Owner Number</label><input type="text" id="install-owner-number" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" placeholder="e.g. 263786831091"></div>
+            <div><label class="text-sm text-gray-400 block mb-1">Prefix</label><input type="text" id="install-prefix" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-brand-500 focus:outline-none" value="${t.default_prefix}"></div>
+          </div>
+        </div>
+      </div>
+      <!-- Additional Env Vars -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-sm text-gray-400">Additional Environment Variables</label>
+          <button type="button" onclick="addInstallEnvRow()" class="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"><i class="ri-add-line"></i> Add Variable</button>
+        </div>
+        <div id="install-env-rows" class="space-y-2"></div>
+      </div>
+      <button type="submit" id="install-btn" class="w-full bg-gradient-to-r ${t.color} text-white py-3 rounded-lg font-medium hover:opacity-90 transition flex items-center justify-center gap-2"><i class="ri-install-line"></i> Install & Deploy ${t.name}</button>
+    </form>`;
+}
+
+async function handleAdminInstallBot(e, templateId) {
+  if (e && e.preventDefault) e.preventDefault();
+  const t = BOT_TEMPLATES.find(b => b.id === templateId);
+  if (!t) return;
+
+  const btn = document.getElementById('install-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ri-loader-4-line animate-spin"></i> Deploying...';
+
+  // Collect env vars
+  const envVars = collectInstallEnvVars();
+  const sessionId = document.getElementById('install-session-id').value.trim();
+  const ownerNumber = document.getElementById('install-owner-number').value.trim();
+  const prefix = document.getElementById('install-prefix').value.trim();
+  if (sessionId && t.session_key) envVars[t.session_key] = sessionId;
+  if (ownerNumber && t.owner_key) envVars[t.owner_key] = ownerNumber;
+  if (prefix && t.prefix_key) envVars[t.prefix_key] = prefix;
+
+  const body = {
+    name: document.getElementById('install-name').value.trim(),
+    description: t.description,
+    repo_url: t.repo,
+    branch: t.branch,
+    entry_point: document.getElementById('install-entry').value.trim() || t.entry,
+    env_vars: envVars,
+    auto_restart: 1,
+    server_tier: 'basic'
+  };
+
+  try {
+    const createData = await api('/api/bots', { method: 'POST', body });
+    const botId = createData.bot.id;
+    btn.innerHTML = '<i class="ri-loader-4-line animate-spin"></i> Cloning & starting...';
+    try {
+      await api(`/api/bots/${botId}/deploy`, { method: 'POST' });
+      toast(`${t.name} deployed successfully!`, 'success');
+    } catch (deployErr) {
+      toast(`Bot created but deploy had an issue: ${deployErr.message}`, 'warning');
+    }
+    navigate('bots');
+  } catch (err) {
+    toast(err.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = `<i class="ri-install-line"></i> Install & Deploy ${t.name}`;
+  }
 }
 
 function addInstallEnvRow(key = '', value = '', description = '') {
@@ -728,30 +1007,7 @@ function collectInstallEnvVars() {
   return env;
 }
 
-async function handleInstallNovaSpark(e) {
-  if (e && e.preventDefault) e.preventDefault();
-  const btn = document.getElementById('install-btn');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="ri-loader-4-line animate-spin"></i> Installing...';
-  try {
-    const body = {
-      name: document.getElementById('install-name').value,
-      description: document.getElementById('install-desc').value,
-      repo_url: 'https://github.com/mr-ntando-dev/NovaSpark-Bot',
-      branch: document.getElementById('install-branch').value || 'main',
-      entry_point: document.getElementById('install-entry').value || 'index.js',
-      env_vars: collectInstallEnvVars()
-    };
-    const data = await api('/api/bots', { method: 'POST', body });
-    await api(`/api/bots/${data.bot.id}/deploy`, { method: 'POST' });
-    toast('NovaSpark Bot installed and deployed!', 'success');
-    setTimeout(() => navigate('bots'), 1000);
-  } catch(err) {
-    toast(err.message, 'error');
-    btn.disabled = false;
-    btn.innerHTML = '<i class="ri-install-line"></i> Install & Deploy NovaSpark Bot';
-  }
-}
+// Old handleInstallNovaSpark removed — replaced by handleAdminInstallBot above
 
 // ─── 2FA ─────────────────────────────────────────────────────────────────────
 async function setup2FA() {

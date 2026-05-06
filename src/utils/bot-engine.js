@@ -78,7 +78,7 @@ function cloneRepo(botId, repoUrl, branch = 'main') {
 }
 
 /**
- * Start a bot process
+ * Start a bot process (isolated — failures here never crash the platform)
  */
 function startBot(botId) {
   const bot = Bots.findById(botId);
@@ -101,39 +101,69 @@ function startBot(botId) {
   let envVars = {};
   try { envVars = JSON.parse(bot.env_vars || '{}'); } catch (_) {}
 
-  const proc = spawn('node', [entryPoint], {
-    cwd: botDir,
-    env: {
-      ...process.env,
-      ...envVars,
-      NODE_ENV: 'production',
-      BOT_ID: botId,
-      BOT_NAME: bot.name,
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-    detached: false
-  });
+  // Determine max RAM for this bot (from DB or global default)
+  const maxRam = bot.max_ram_mb || BOT_MAX_RAM_MB;
+
+  let proc;
+  try {
+    proc = spawn('node', [`--max-old-space-size=${maxRam}`, entryPoint], {
+      cwd: botDir,
+      env: {
+        ...process.env,
+        ...envVars,
+        NODE_ENV: 'production',
+        BOT_ID: botId,
+        BOT_NAME: bot.name,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: false
+    });
+  } catch (spawnErr) {
+    BotLogs.add(botId, 'error', `Failed to spawn process: ${spawnErr.message}`);
+    Bots.update(botId, { status: 'failed' });
+    throw new Error(`Failed to spawn bot process: ${spawnErr.message}`);
+  }
+
+  // Guard: if spawn returned but process immediately errored
+  if (!proc || !proc.pid) {
+    BotLogs.add(botId, 'error', 'Process spawn returned no PID');
+    Bots.update(botId, { status: 'failed' });
+    throw new Error('Bot process failed to start (no PID)');
+  }
 
   const record = { proc, restartCount: 0, lastRestart: Date.now(), backoffMs: BOT_RESTART_BACKOFF_BASE };
   processes.set(botId, record);
 
-  // Capture stdout
+  // Capture stdout (wrapped in try/catch — bot stdout should NEVER crash the platform)
   proc.stdout.on('data', (data) => {
-    const lines = data.toString().split('\n').filter(l => l.trim());
-    for (const line of lines) {
-      BotLogs.add(botId, 'info', line.slice(0, 500));
-    }
+    try {
+      const lines = data.toString().split('\n').filter(l => l.trim());
+      for (const line of lines) {
+        BotLogs.add(botId, 'info', line.slice(0, 500));
+      }
+    } catch (_) { /* swallow */ }
   });
 
-  // Capture stderr (filter noise)
+  // Capture stderr (filter noise, wrapped in try/catch)
   proc.stderr.on('data', (data) => {
-    const lines = data.toString().split('\n').filter(l => l.trim());
-    for (const line of lines) {
-      const isNoise = NOISE_PATTERNS.some(p => p.test(line));
-      if (!isNoise) {
-        BotLogs.add(botId, 'error', line.slice(0, 500));
+    try {
+      const lines = data.toString().split('\n').filter(l => l.trim());
+      for (const line of lines) {
+        const isNoise = NOISE_PATTERNS.some(p => p.test(line));
+        if (!isNoise) {
+          BotLogs.add(botId, 'error', line.slice(0, 500));
+        }
       }
-    }
+    } catch (_) { /* swallow */ }
+  });
+
+  // Guard: if child process errors on its own handle (e.g. EACCES, ENOENT)
+  proc.on('error', (err) => {
+    try {
+      BotLogs.add(botId, 'error', `Process error: ${err.message}`);
+      processes.delete(botId);
+      Bots.update(botId, { status: 'crashed', pid: null });
+    } catch (_) {}
   });
 
   // Handle exit
