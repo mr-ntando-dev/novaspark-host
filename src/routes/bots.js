@@ -283,7 +283,14 @@ router.post('/:id/session-id', authenticate, async (req, res) => {
   const botDir = path.join(BOTS_DIR, req.params.id);
   if (fs.existsSync(botDir)) {
     try {
-      let b64 = session_id.trim().replace(/^[A-Z_a-z]+~/i, '');
+      let b64 = session_id.trim()
+        .replace(/^NovaSpark!/i, '')
+        .replace(/^NovaSpark~/i, '')
+        .replace(/^KnightBot!/i, '')
+        .replace(/^LEVANTER~/i, '')
+        .replace(/^SUBZERO~/i, '')
+        .replace(/^[A-Z][A-Za-z0-9_-]+[!~]/g, '');
+
       let decoded;
       try {
         const buf = Buffer.from(b64, 'base64');
@@ -341,8 +348,12 @@ router.get('/:id/session-id', authenticate, (req, res) => {
     if (fs.existsSync(credsPath)) {
       try {
         const creds = fs.readFileSync(credsPath, 'utf8');
-        const b64 = Buffer.from(creds).toString('base64');
-        const sessionId = `NovaSpark~${b64}`;
+        // NovaSpark-Bot decodes: base64 → gunzip → creds.json
+        // So we encode: gzip(creds.json) → base64 → prepend "NovaSpark!"
+        const zlib = require('zlib');
+        const gzipped = zlib.gzipSync(Buffer.from(creds, 'utf8'));
+        const b64 = gzipped.toString('base64');
+        const sessionId = `NovaSpark!${b64}`;
         return res.json({
           session_id: sessionId,
           message: 'Copy this SESSION_ID and paste it into your next bot deployment. Keep it secret — it gives full WhatsApp access.'

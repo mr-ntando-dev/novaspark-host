@@ -453,18 +453,26 @@ function restoreSession(botId, botDir, bot) {
   const rawSession = envVars['SESSION_ID'] || envVars['SESSION'] || envVars['CREDS'] || '';
   if (rawSession && rawSession.trim().length > 20) {
     try {
-      // Strip known bot-specific prefixes (e.g. "NovaSpark~", "LEVANTER~", "SUBZERO~")
-      let b64 = rawSession.trim().replace(/^[A-Z_]+~/i, '');
+      // Strip known bot-specific prefixes
+      // NovaSpark-Bot uses "NovaSpark!" (exclamation), also support "~" and other variants
+      let b64 = rawSession.trim()
+        .replace(/^NovaSpark!/i, '')
+        .replace(/^NovaSpark~/i, '')
+        .replace(/^KnightBot!/i, '')
+        .replace(/^LEVANTER~/i, '')
+        .replace(/^SUBZERO~/i, '')
+        .replace(/^[A-Z][A-Za-z0-9_-]+[!~]/g, ''); // any other "PREFIX!" or "PREFIX~"
 
-      // Try to decode as base64 → JSON (creds.json)
+      // Try to decode as base64
       let decoded;
       try {
         const buf = Buffer.from(b64, 'base64');
-        // Try gzip first (Levanter style)
+        // Try gzip first — NovaSpark-Bot uses gzip+base64
         try {
           const zlib = require('zlib');
           decoded = zlib.gunzipSync(buf).toString('utf8');
         } catch (_) {
+          // Plain base64 fallback
           decoded = buf.toString('utf8');
         }
       } catch (_) {}
