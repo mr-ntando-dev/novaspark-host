@@ -22,29 +22,13 @@ async function api(path, opts = {}) {
       throw new Error(data.error || 'Invalid credentials');
     }
 
-    // Try to refresh expired token once
-    if (data.code === 'TOKEN_EXPIRED' && refreshToken) {
-      const r = await fetch(`${API}/api/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken })
-      });
-      if (r.ok) {
-        const t = await r.json();
-        setTokens(t.accessToken, t.refreshToken);
-        return api(path, opts);
-      }
-    }
-
-    // Token is truly invalid/expired and refresh failed — show auth modal
-    // but do NOT hard-logout from background requests (notif badge, etc.)
+    // Token is invalid — show auth modal
     if (currentUser) {
       token = null; refreshToken = null; currentUser = null;
       localStorage.removeItem('ns_token');
       localStorage.removeItem('ns_refresh');
       if (ws) { ws.close(); ws = null; }
       showAuth();
-      toast('Session expired. Please log in again.', 'error');
     }
     throw new Error(data.error || 'Unauthorized');
   }
@@ -1260,7 +1244,7 @@ window.addEventListener('unhandledrejection', function(event) {
   console.error('[NovaSpark] Unhandled promise rejection:', event.reason);
   // Only show toast for non-auth errors (auth errors are handled)
   const msg = event.reason?.message || String(event.reason);
-  if (!msg.includes('Unauthorized') && !msg.includes('TOKEN_EXPIRED')) {
+  if (!msg.includes('Unauthorized')) {
     try { toast('A background operation failed.', 'error'); } catch(_) {}
   }
   event.preventDefault();

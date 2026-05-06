@@ -33,17 +33,7 @@ const domainsRoutes = require('./src/routes/domains');
 const backupsRoutes = require('./src/routes/backups');
 const versioningRoutes = require('./src/routes/versioning');
 
-// V13 Routes
-const terminalRoutes = require('./src/routes/terminal');
-const anomalyRoutes = require('./src/routes/anomaly');
-const eventBusRoutes = require('./src/routes/event-bus');
-const pluginsRoutes = require('./src/routes/plugins');
-const vaultRoutes = require('./src/routes/vault');
-const pipelinesRoutes = require('./src/routes/pipelines');
-const statusPagesRoutes = require('./src/routes/status-pages');
-const quotasRoutes = require('./src/routes/quotas');
-const rateLimiterRoutes = require('./src/routes/rate-limiter');
-const regionsRoutes = require('./src/routes/regions');
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -91,29 +81,18 @@ app.use('/api/domains', domainsRoutes);
 app.use('/api/backups', backupsRoutes);
 app.use('/api/versions', versioningRoutes);
 
-// V13 API Routes
-app.use('/api/terminal', terminalRoutes);
-app.use('/api/anomaly', anomalyRoutes);
-app.use('/api/event-bus', eventBusRoutes);
-app.use('/api/plugins', pluginsRoutes);
-app.use('/api/vault', vaultRoutes);
-app.use('/api/pipelines', pipelinesRoutes);
-app.use('/api/status-pages', statusPagesRoutes);
-app.use('/api/quotas', quotasRoutes);
-app.use('/api/rate-limiter', rateLimiterRoutes);
-app.use('/api/regions', regionsRoutes);
+
 
 // Health check
 app.get('/api/health', (req, res) => {
   const running = getRunningBots();
   res.json({
     status: 'ok',
-    version: '13.0.0',
+    version: '12.0.0',
     uptime: process.uptime(),
     running_bots: running.length,
     features: [
-      'analytics', 'teams', 'scheduler', 'marketplace', 'webhooks', 'domains', 'backups', 'versioning',
-      'terminal', 'anomaly-detection', 'event-bus', 'plugins', 'vault', 'pipelines', 'status-pages', 'quotas', 'rate-limiter', 'regions'
+      'analytics', 'teams', 'scheduler', 'marketplace', 'webhooks', 'domains', 'backups', 'versioning'
     ],
     timestamp: new Date().toISOString()
   });
@@ -332,7 +311,7 @@ cron.schedule('*/10 * * * *', () => {
 server.listen(PORT, async () => {
   console.log('');
   console.log(chalk.bold.magenta('  ╔══════════════════════════════════════════════════════╗'));
-  console.log(chalk.bold.magenta('  ║         NOVASPARK V13  ⚡  ONLINE                  ║'));
+  console.log(chalk.bold.magenta('  ║         NOVASPARK  ⚡  ONLINE                       ║'));
   console.log(chalk.bold.magenta('  ║         Advanced Bot Hosting Platform               ║'));
   console.log(chalk.bold.magenta('  ╚══════════════════════════════════════════════════════╝'));
   console.log('');
@@ -340,11 +319,8 @@ server.listen(PORT, async () => {
   console.log(chalk.cyan(`  🔌 WebSocket:   ws://localhost:${PORT}/ws`));
   console.log(chalk.cyan(`  💾 Database:    SQLite (WAL mode)`));
   console.log(chalk.cyan(`  🏥 Health:      /api/health`));
-  console.log(chalk.cyan(`  📊 V12 Core:    Analytics, Teams, Scheduler, Marketplace`));
+  console.log(chalk.cyan(`  📊 Core:        Analytics, Teams, Scheduler, Marketplace`));
   console.log(chalk.cyan(`                  Webhooks, Domains, Backups, Versioning`));
-  console.log(chalk.cyan(`  🚀 V13 New:     Terminal, AI Anomaly Detection, Event Bus`));
-  console.log(chalk.cyan(`                  Plugins, Vault, CI/CD Pipelines, Status Pages`));
-  console.log(chalk.cyan(`                  Resource Quotas, Rate Limiter, Geo Regions`));
   console.log('');
 
   await bootstrapAdmin();
@@ -354,31 +330,8 @@ server.listen(PORT, async () => {
   const { initScheduler } = require('./src/routes/scheduler');
   initScheduler();
 
-  Alerts.systemAlert('NovaSpark V13 started successfully.');
+  Alerts.systemAlert('NovaSpark started successfully.');
   console.log(chalk.green('  ✅ All systems nominal. Ready to host bots.\n'));
-
-  // V13: Start anomaly detection metrics collection (every 60s)
-  const { recordMetrics } = require('./src/routes/anomaly');
-  setInterval(() => {
-    try {
-      const si = require('systeminformation');
-      const running = getRunningBots();
-      for (const botId of running) {
-        const bot = Bots.findById(botId);
-        if (bot) {
-          si.currentLoad().then(cpu => {
-            recordMetrics(botId, {
-              cpu: cpu.currentLoad || 0,
-              ram: bot.max_ram_mb || 0,
-              errors: 0,
-              restarts: bot.restart_count || 0,
-              responseTime: 0
-            });
-          }).catch(() => {});
-        }
-      }
-    } catch (_) {}
-  }, 60000);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

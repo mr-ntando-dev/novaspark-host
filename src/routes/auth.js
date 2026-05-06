@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 const { authenticator } = require('otplib');
 const QRCode = require('qrcode');
 const { Users, AuditLog, Notifications } = require('../database');
-const { generateTokens, authenticate, JWT_REFRESH_SECRET } = require('../middleware/auth');
+const { generateTokens, authenticate } = require('../middleware/auth');
 const { authLimiter, checkBruteForce, recordFailedLogin, clearLoginAttempts } = require('../middleware/security');
 const { Alerts } = require('../utils/discord-alerts');
 
@@ -142,24 +142,6 @@ router.post('/login', authLimiter, async (req, res) => {
   } catch (e) {
     console.error('[Auth] Login error:', e);
     res.status(500).json({ error: 'Login failed' });
-  }
-});
-
-// ─── REFRESH TOKEN ───────────────────────────────────────────────────────────
-router.post('/refresh', (req, res) => {
-  const { refreshToken } = req.body;
-  if (!refreshToken) return res.status(400).json({ error: 'Refresh token required' });
-
-  try {
-    const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
-    const user = Users.findById(decoded.id);
-    if (!user) return res.status(401).json({ error: 'User not found' });
-    if (user.is_banned) return res.status(403).json({ error: 'Account suspended' });
-
-    const tokens = generateTokens(user);
-    res.json(tokens);
-  } catch (e) {
-    res.status(401).json({ error: 'Invalid refresh token' });
   }
 });
 
