@@ -38,6 +38,101 @@ const NOISE_PATTERNS = [
 ];
 
 /**
+ * Known broken git dependencies and their working replacements.
+ * These repos have been deleted/made private but are still referenced
+ * by popular WhatsApp bot packages (baileys forks like angularsockets, etc.)
+ *
+ * When a dep resolves to a dead GitHub repo, npm install fails with:
+ *   "npm error code 128 / An unknown git error occurred"
+ * We rewrite these to working public forks BEFORE npm install runs.
+ */
+const BROKEN_DEP_REPLACEMENTS = {
+  // alifalfrl/libsignal-node was deleted — use a maintained public fork
+  'github:alifalfrl/libsignal-node': 'github:this-xys/libsignal-node',
+  'git+ssh://git@github.com/alifalfrl/libsignal-node.git': 'github:this-xys/libsignal-node',
+  'git://github.com/alifalfrl/libsignal-node.git': 'github:this-xys/libsignal-node',
+  'https://github.com/alifalfrl/libsignal-node': 'github:this-xys/libsignal-node',
+};
+
+/**
+ * Patch broken git dependencies in package.json AND in any already-installed
+ * nested package.json files (e.g. node_modules/angularsockets/package.json)
+ * before running npm install. This prevents install failures from dead GitHub repos.
+ */
+function patchBrokenDeps(botId, botDir) {
+  const targets = [path.join(botDir, 'package.json')];
+
+  // Also check package-lock.json (npm uses it to resolve git deps)
+  const lockPath = path.join(botDir, 'package-lock.json');
+  if (fs.existsSync(lockPath)) targets.push(lockPath);
+
+  let patched = false;
+  for (const filePath of targets) {
+    if (!fs.existsSync(filePath)) continue;
+    try {
+      let content = fs.readFileSync(filePath, 'utf8');
+      let modified = content;
+
+      for (const [broken, replacement] of Object.entries(BROKEN_DEP_REPLACEMENTS)) {
+        if (modified.includes(broken)) {
+          modified = modified.split(broken).join(replacement);
+          patched = true;
+        }
+      }
+
+      // Catch any remaining references to alifalfrl's deleted repos via regex
+      modified = modified.replace(
+        /github:alifalfrl\/libsignal-node/g,
+        'github:this-xys/libsignal-node'
+      );
+      modified = modified.replace(
+        /git\+ssh:\/\/git@github\.com\/alifalfrl\/libsignal-node(\.git)?/g,
+        'github:this-xys/libsignal-node'
+      );
+      modified = modified.replace(
+        /ssh:\/\/git@github\.com\/alifalfrl\/libsignal-node(\.git)?/g,
+        'github:this-xys/libsignal-node'
+      );
+
+      if (modified !== content) {
+        fs.writeFileSync(filePath, modified, 'utf8');
+        patched = true;
+      }
+    } catch (e) {
+      BotLogs.add(botId, 'warn', `Failed to patch ${path.basename(filePath)}: ${e.message}`);
+    }
+  }
+
+  if (patched) {
+    BotLogs.add(botId, 'info', 'Patched broken git dependencies (dead repos replaced with working forks)');
+  }
+
+  // IMPORTANT: The broken dep comes from angularsockets (a baileys fork).
+  // npm resolves transitive deps from the registry first, THEN tries git deps.
+  // We need to add an npm override to force the replacement at install time
+  // since the broken ref is inside angularsockets, not in the user's package.json.
+  const pkgPath = path.join(botDir, 'package.json');
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+
+      // Add npm "overrides" to force the broken transitive dep to use our fork
+      if (!pkg.overrides) pkg.overrides = {};
+      pkg.overrides['libsignal'] = 'github:this-xys/libsignal-node';
+
+      // For yarn compatibility, also add "resolutions"
+      if (!pkg.resolutions) pkg.resolutions = {};
+      pkg.resolutions['libsignal'] = 'github:this-xys/libsignal-node';
+
+      fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+      BotLogs.add(botId, 'info', 'Added npm override for broken transitive dep: libsignal -> this-xys/libsignal-node');
+    } catch (e) {
+      BotLogs.add(botId, 'warn', `Failed to add overrides: ${e.message}`);
+    }
+  }
+}
+
+/**
  * Clone a bot repository
  */
 function cloneRepo(botId, repoUrl, branch = 'main') {
@@ -79,6 +174,19 @@ function cloneRepo(botId, repoUrl, branch = 'main') {
       execSync('git config --global url."https://github.com/".insteadOf ssh://git@github.com/', { timeout: 5000, stdio: 'pipe' });
       execSync('git config --global url."https://github.com/".insteadOf git@github.com:', { timeout: 5000, stdio: 'pipe' });
     } catch (_) {}
+
+    // Patch known broken/dead git dependencies before npm install
+    patchBrokenDeps(botId, botDir);
+
+    // Delete stale package-lock.json — it may have hardcoded references to dead git repos
+    // that override our package.json patches. npm will regenerate it on install.
+    const stalelock = path.join(botDir, 'package-lock.json');
+    if (fs.existsSync(stalelock)) {
+      try {
+        fs.unlinkSync(stalelock);
+        BotLogs.add(botId, 'info', 'Removed stale package-lock.json (will regenerate)');
+      } catch (_) {}
+    }
 
     const installCmd = fs.existsSync(yarnLock)
       ? `cd "${botDir}" && npx yarn install --network-concurrency 1 --ignore-engines`
