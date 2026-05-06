@@ -262,6 +262,10 @@ function startBot(botId) {
 
   // Handle exit
   proc.on('exit', (code, signal) => {
+    // Capture restart state BEFORE deleting from map
+    const currentRestartCount = record.restartCount;
+    const currentBackoffMs = record.backoffMs;
+
     processes.delete(botId);
     const reason = signal ? `signal ${signal}` : `code ${code}`;
     BotLogs.add(botId, 'warn', `Process exited (${reason})`);
@@ -269,18 +273,20 @@ function startBot(botId) {
     // Update DB
     Bots.update(botId, { status: 'crashed', pid: null });
 
-    // Auto-restart logic
+    // Auto-restart logic — use captured values so backoff actually grows
     const freshBot = Bots.findById(botId);
-    if (freshBot && freshBot.auto_restart && record.restartCount < BOT_MAX_RESTARTS) {
-      const backoff = Math.min(record.backoffMs * Math.pow(1.5, record.restartCount), BOT_RESTART_BACKOFF_MAX);
-      BotLogs.add(botId, 'info', `Auto-restarting in ${Math.round(backoff / 1000)}s (attempt ${record.restartCount + 1})`);
+    if (freshBot && freshBot.auto_restart && currentRestartCount < BOT_MAX_RESTARTS) {
+      const backoff = Math.min(currentBackoffMs * Math.pow(1.5, currentRestartCount), BOT_RESTART_BACKOFF_MAX);
+      BotLogs.add(botId, 'info', `Auto-restarting in ${Math.round(backoff / 1000)}s (attempt ${currentRestartCount + 1})`);
 
       setTimeout(() => {
         try {
           startBot(botId);
           const newRecord = processes.get(botId);
           if (newRecord) {
-            newRecord.restartCount = record.restartCount + 1;
+            // Carry forward the restart count and a grown backoff so it keeps escalating
+            newRecord.restartCount = currentRestartCount + 1;
+            newRecord.backoffMs = backoff;
           }
           Bots.update(botId, { total_restarts: (freshBot.total_restarts || 0) + 1 });
         } catch (e) {
@@ -387,18 +393,23 @@ function getRunningBots() {
 
 /**
  * Watchdog — check all running bots
+ * NOTE: Only marks bots as dead if the exit event hasn't already handled it.
+ * We do NOT trigger auto-restart here — the exit handler owns that logic.
+ * This prevents double-restart races.
  */
 function runWatchdog() {
   for (const [botId, record] of processes) {
     try {
-      // Check if process is still alive
+      // Check if process is still alive (signal 0 = existence check only)
       process.kill(record.proc.pid, 0);
       Bots.update(botId, { last_health_check: new Date().toISOString(), health_status: 'healthy' });
     } catch (e) {
-      // Process is dead but we didn't get exit event
-      BotLogs.add(botId, 'error', 'Watchdog: process not responding');
+      // Process is dead but exit event may not have fired yet — just clean up state.
+      // Do NOT attempt another restart here; the exit handler will handle it.
+      BotLogs.add(botId, 'warn', `Watchdog: PID ${record.proc.pid} is gone — cleaning up state`);
       processes.delete(botId);
       Bots.update(botId, { status: 'crashed', pid: null, health_status: 'dead' });
+      // The proc's exit event will still fire and handle auto-restart via the closure
     }
   }
 }

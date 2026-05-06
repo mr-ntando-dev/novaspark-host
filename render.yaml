@@ -4,7 +4,7 @@ services:
     runtime: node
     buildCommand: npm install
     startCommand: node server.js
-    plan: free
+    plan: starter
     healthCheckPath: /api/health
     autoDeploy: true
     disk:
@@ -14,6 +14,9 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # IMPORTANT: Set RENDER_URL to your service URL after first deploy
+      # e.g. https://novaspark-v11.onrender.com
+      # This enables the keep-alive ping that prevents Render from spinning down
       - key: RENDER_URL
         sync: false
       - key: ADMIN_USERNAME
