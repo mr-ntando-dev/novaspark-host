@@ -630,7 +630,9 @@ function startBot(botId) {
             message: 'WhatsApp session conflict (440). Delete session and re-scan QR code.'
           });
           broadcastBotLog(bot.owner_id, botId, 'error', '[WA 440] Session replaced - delete session and re-scan QR');
+          // Kill process and prevent restart — bot will keep reconnecting internally otherwise
           record.restartCount = BOT_MAX_RESTARTS;
+          try { record.proc.kill('SIGTERM'); } catch (_) {}
           continue;
         }
         // Detect base64 QR codes (Baileys outputs data:image/png;base64,... to stdout)
@@ -679,8 +681,9 @@ function startBot(botId) {
             message: 'WhatsApp session conflict (440). Delete session and re-scan QR code.'
           });
           broadcastBotLog(bot.owner_id, botId, 'error', '[WA 440] Session replaced - delete session and re-scan QR');
-          // Disable auto-restart — restarting on 440 creates an infinite loop
+          // Kill process and prevent restart — bot's internal reconnect loop makes it worse
           record.restartCount = BOT_MAX_RESTARTS;
+          try { record.proc.kill('SIGTERM'); } catch (_) {}
           continue;
         }
         const isNoise = NOISE_PATTERNS.some(p => p.test(line));
@@ -720,6 +723,17 @@ function startBot(botId) {
 
     // Auto-restart logic — use captured values so backoff actually grows
     const freshBot = Bots.findById(botId);
+
+    // Rapid-crash detection: if bot crashed 5+ times in under 2 minutes, stop restarting
+    const rapidCrashLimit = 5;
+    const uptime = Date.now() - (record.lastRestart || 0);
+    if (currentRestartCount >= rapidCrashLimit && uptime < 120000) {
+      BotLogs.add(botId, 'error', `Bot crashed ${currentRestartCount + 1} times in ${Math.round(uptime / 1000)}s — stopping auto-restart. Check logs and clear session if error 440.`);
+      broadcastBotStatus(bot.owner_id, botId, 'crashed', { reason: 'Rapid crash loop detected — auto-restart disabled' });
+      Bots.update(botId, { auto_restart: 0 });
+      return;
+    }
+
     if (freshBot && freshBot.auto_restart && currentRestartCount < BOT_MAX_RESTARTS) {
       const backoff = Math.min(currentBackoffMs * Math.pow(1.5, currentRestartCount), BOT_RESTART_BACKOFF_MAX);
       BotLogs.add(botId, 'info', `Auto-restarting in ${Math.round(backoff / 1000)}s (attempt ${currentRestartCount + 1})`);
