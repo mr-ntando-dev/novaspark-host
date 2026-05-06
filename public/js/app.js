@@ -843,13 +843,12 @@ async function handleDeploy(e) {
     const createData = await api('/api/bots', { method: 'POST', body });
     const botId = createData.bot.id;
 
-    // Step 2: Deploy (clone + start)
-    btn.innerHTML = '<i class="ri-loader-4-line animate-spin"></i> Cloning & deploying...';
+    // Step 2: Deploy (clone + start) — now async on the backend
+    btn.innerHTML = '<i class="ri-loader-4-line animate-spin"></i> Starting deploy...';
     try {
       await api(`/api/bots/${botId}/deploy`, { method: 'POST' });
-      toast('Bot deployed successfully!', 'success');
+      toast('Deploy started! Installing dependencies — this may take a few minutes. Check bot status in My Bots.', 'success');
     } catch (deployErr) {
-      // Bot was created but deploy failed — still navigate to bots so user can retry
       toast(`Bot created but deploy had an issue: ${deployErr.message}. You can retry from My Bots.`, 'warning');
     }
 

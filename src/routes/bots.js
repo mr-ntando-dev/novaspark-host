@@ -153,23 +153,29 @@ router.post('/:id/deploy', authenticate, async (req, res) => {
   }
   if (!bot.repo_url) return res.status(400).json({ error: 'No repository URL configured' });
 
-  try {
-    // Stop if running
-    try { stopBot(req.params.id); } catch (_) {}
+  // Stop if running
+  try { stopBot(req.params.id); } catch (_) {}
 
-    // Clone/pull
-    Bots.update(req.params.id, { status: 'deploying' });
-    cloneRepo(req.params.id, bot.repo_url, bot.branch || 'main');
+  // Update status and respond IMMEDIATELY — don't block the HTTP request
+  Bots.update(req.params.id, { status: 'deploying' });
+  BotLogs.add(req.params.id, 'info', 'Deploy started — cloning repo and installing dependencies...');
+  res.json({ message: 'Deploy started', status: 'deploying' });
 
-    // Start
-    const result = startBot(req.params.id);
-    Notifications.create(bot.owner_id, 'success', 'Bot Deployed', `${bot.name} was deployed successfully.`);
-    res.json({ message: 'Deployed successfully', ...result });
-  } catch (e) {
-    Bots.update(req.params.id, { status: 'failed' });
-    BotLogs.add(req.params.id, 'error', `Deploy failed: ${e.message}`);
-    res.status(400).json({ error: `Deploy failed: ${e.message}` });
-  }
+  // Run the heavy clone/install/start work in the background
+  setImmediate(async () => {
+    try {
+      cloneRepo(req.params.id, bot.repo_url, bot.branch || 'main');
+      BotLogs.add(req.params.id, 'info', 'Dependencies installed, starting bot...');
+
+      const result = startBot(req.params.id);
+      Notifications.create(bot.owner_id, 'success', 'Bot Deployed', `${bot.name} was deployed successfully.`);
+      BotLogs.add(req.params.id, 'info', 'Bot started successfully.');
+    } catch (e) {
+      Bots.update(req.params.id, { status: 'failed' });
+      BotLogs.add(req.params.id, 'error', `Deploy failed: ${e.message}`);
+      Notifications.create(bot.owner_id, 'error', 'Deploy Failed', `${bot.name} failed to deploy: ${e.message.slice(0, 150)}`);
+    }
+  });
 });
 
 // ─── BOT LOGS ────────────────────────────────────────────────────────────────
