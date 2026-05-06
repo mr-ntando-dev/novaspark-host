@@ -63,18 +63,91 @@ function cloneRepo(botId, repoUrl, branch = 'main') {
     }
   }
 
-  // Install dependencies
+  // Write env vars into config files (settings.js, config.env, etc.) for bots that don't read process.env
+  const bot = Bots.findById(botId);
+  if (bot) {
+    writeConfigFiles(botId, botDir, bot);
+  }
+
+  // Install dependencies — detect yarn vs npm
   const pkgPath = path.join(botDir, 'package.json');
   if (fs.existsSync(pkgPath)) {
+    const yarnLock = path.join(botDir, 'yarn.lock');
+    const installCmd = fs.existsSync(yarnLock)
+      ? `cd "${botDir}" && npx yarn install --network-concurrency 1 --ignore-engines`
+      : `cd "${botDir}" && npm install --production`;
     try {
-      execSync(`cd "${botDir}" && npm install --production`, { timeout: 180000, stdio: 'pipe' });
-      BotLogs.add(botId, 'info', 'Dependencies installed');
+      execSync(installCmd, { timeout: 180000, stdio: 'pipe' });
+      BotLogs.add(botId, 'info', `Dependencies installed (${fs.existsSync(yarnLock) ? 'yarn' : 'npm'})`);
     } catch (e) {
-      BotLogs.add(botId, 'warn', `npm install warning: ${e.message}`);
+      BotLogs.add(botId, 'warn', `Install warning: ${e.message}`);
     }
   }
 
   return botDir;
+}
+
+/**
+ * Write environment variables into bot-specific config files.
+ * Many WhatsApp bots (SubZero, etc.) read config from a JS/JSON file
+ * instead of process.env. This function detects common patterns and
+ * writes the user's env vars into the appropriate config file.
+ */
+function writeConfigFiles(botId, botDir, bot) {
+  let envVars = {};
+  try { envVars = JSON.parse(bot.env_vars || '{}'); } catch (_) {}
+  if (!envVars || Object.keys(envVars).length === 0) return;
+
+  // Pattern 1: settings.js (SubZero-style) — module.exports = { KEY: "value", ... }
+  const settingsPath = path.join(botDir, 'settings.js');
+  if (fs.existsSync(settingsPath)) {
+    try {
+      const original = fs.readFileSync(settingsPath, 'utf8');
+      let modified = original;
+
+      for (const [key, value] of Object.entries(envVars)) {
+        // Match patterns like:  SESSION_ID: "...",  or  SESSION_ID: '...',
+        const regex = new RegExp(`(${key}\\s*:\\s*)(['"\`])([^'"\`]*)\\2`, 'g');
+        if (regex.test(modified)) {
+          modified = modified.replace(
+            new RegExp(`(${key}\\s*:\\s*)(['"\`])([^'"\`]*)\\2`, 'g'),
+            `$1$2${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}$2`
+          );
+        }
+      }
+
+      if (modified !== original) {
+        fs.writeFileSync(settingsPath, modified, 'utf8');
+        BotLogs.add(botId, 'info', 'Wrote config to settings.js');
+      }
+    } catch (e) {
+      BotLogs.add(botId, 'warn', `Failed to write settings.js: ${e.message}`);
+    }
+  }
+
+  // Pattern 2: config.env file (Levanter-style) — KEY=value per line
+  const configEnvPath = path.join(botDir, 'config.env');
+  // Always write config.env if .env or config.env.example exists (bot reads from config.env)
+  const configEnvExample = path.join(botDir, 'config.env.example');
+  if (fs.existsSync(configEnvExample) || fs.existsSync(configEnvPath)) {
+    try {
+      const lines = Object.entries(envVars).map(([k, v]) => `${k}=${v}`);
+      fs.writeFileSync(configEnvPath, lines.join('\n') + '\n', 'utf8');
+      BotLogs.add(botId, 'info', 'Wrote config to config.env');
+    } catch (e) {
+      BotLogs.add(botId, 'warn', `Failed to write config.env: ${e.message}`);
+    }
+  }
+
+  // Pattern 3: .env file — always write as a fallback for bots using dotenv
+  const envFilePath = path.join(botDir, '.env');
+  try {
+    const lines = Object.entries(envVars).map(([k, v]) => `${k}=${v}`);
+    fs.writeFileSync(envFilePath, lines.join('\n') + '\n', 'utf8');
+    BotLogs.add(botId, 'info', 'Wrote .env file');
+  } catch (e) {
+    BotLogs.add(botId, 'warn', `Failed to write .env: ${e.message}`);
+  }
 }
 
 /**
@@ -90,6 +163,9 @@ function startBot(botId) {
     if (!bot.repo_url) throw new Error('No repository configured');
     cloneRepo(botId, bot.repo_url, bot.branch || 'main');
   }
+
+  // Always write config files on start (in case env vars were updated)
+  writeConfigFiles(botId, botDir, bot);
 
   const entryPoint = bot.entry_point || 'index.js';
   const entryPath = path.join(botDir, entryPoint);

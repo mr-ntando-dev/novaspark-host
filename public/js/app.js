@@ -391,7 +391,7 @@ const BOT_TEMPLATES = [
   {
     id: 'subzero',
     name: 'Subzero MD',
-    description: 'World Best WhatsApp Bot - Made in Uganda by Lucky 218',
+    description: 'World Best WhatsApp Bot - Made in Zimbabwe by Mr Frank',
     repo: 'https://github.com/subzero-md/SUBZERO-DM',
     branch: 'main',
     entry: 'index.js',
@@ -401,14 +401,16 @@ const BOT_TEMPLATES = [
     session_key: 'SESSION_ID',
     owner_key: 'OWNER_NUMBER',
     prefix_key: 'PREFIX',
-    default_prefix: '.'
+    default_prefix: '.',
+    config_file: 'settings.js',
+    config_format: 'module.exports'
   },
   {
     id: 'levanter',
     name: 'Levanter',
     description: 'Feature-rich WhatsApp bot supporting multiple sessions',
     repo: 'https://github.com/lyfe00011/levanter',
-    branch: 'main',
+    branch: 'master',
     entry: 'index.js',
     icon: '🌿',
     color: 'from-green-500 to-emerald-500',
@@ -438,7 +440,7 @@ const BOT_TEMPLATES = [
     name: 'Queen Anya v3',
     description: 'Modular WhatsApp plugins bot powered by Baileys',
     repo: 'https://github.com/PikaBotz/AnyaBotV3',
-    branch: 'main',
+    branch: 'proto',
     entry: 'index.js',
     icon: '👑',
     color: 'from-pink-500 to-rose-500',
@@ -522,9 +524,13 @@ function renderBotTemplates() {
   `).join('');
 }
 
+let _selectedTemplateId = null;
+
 function selectBotTemplate(templateId) {
   const t = BOT_TEMPLATES.find(b => b.id === templateId);
   if (!t) return;
+
+  _selectedTemplateId = templateId;
 
   // Auto-fill the deploy form
   document.getElementById('d-repo').value = t.repo;
@@ -665,9 +671,16 @@ async function handleDeploy(e) {
   const sessionId = document.getElementById('d-session-id').value.trim();
   const ownerNumber = document.getElementById('d-owner-number').value.trim();
   const prefix = document.getElementById('d-prefix').value.trim();
-  if (sessionId) envVars['SESSION_ID'] = sessionId;
-  if (ownerNumber) envVars['OWNER_NUMBER'] = ownerNumber;
-  if (prefix) envVars['PREFIX'] = prefix;
+
+  // Map session/owner/prefix to the correct env var key based on selected template
+  const activeTemplate = BOT_TEMPLATES.find(t => t.repo === repoUrl);
+  const sessionKey = (activeTemplate && activeTemplate.session_key) || 'SESSION_ID';
+  const ownerKey = (activeTemplate && activeTemplate.owner_key) || 'OWNER_NUMBER';
+  const prefixKey = (activeTemplate && activeTemplate.prefix_key) || 'PREFIX';
+
+  if (sessionId) envVars[sessionKey] = sessionId;
+  if (ownerNumber) envVars[ownerKey] = ownerNumber;
+  if (prefix) envVars[prefixKey] = prefix;
 
   const body = {
     name,
