@@ -211,6 +211,162 @@ function initSchema(db) {
   // ── Schema migrations (idempotent — safe to run on every boot) ──────────
   // V11.2: add session_dir column to bots table
   try { db.exec(`ALTER TABLE bots ADD COLUMN session_dir TEXT DEFAULT NULL`); } catch (_) {}
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // V12.0: Advanced Features — Teams, Scheduler, Marketplace, Webhooks, etc.
+  // ═══════════════════════════════════════════════════════════════════════════
+  db.exec(`
+    -- TEAMS
+    CREATE TABLE IF NOT EXISTS teams (
+      id          TEXT PRIMARY KEY,
+      name        TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      owner_id    TEXT NOT NULL,
+      invite_code TEXT UNIQUE,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS team_members (
+      id        TEXT PRIMARY KEY,
+      team_id   TEXT NOT NULL,
+      user_id   TEXT NOT NULL,
+      role      TEXT NOT NULL DEFAULT 'viewer',
+      joined_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(team_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS team_bots (
+      id        TEXT PRIMARY KEY,
+      team_id   TEXT NOT NULL,
+      bot_id    TEXT NOT NULL,
+      shared_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+      FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE,
+      UNIQUE(team_id, bot_id)
+    );
+
+    -- SCHEDULED TASKS
+    CREATE TABLE IF NOT EXISTS scheduled_tasks (
+      id              TEXT PRIMARY KEY,
+      bot_id          TEXT NOT NULL,
+      owner_id        TEXT NOT NULL,
+      name            TEXT NOT NULL,
+      action          TEXT NOT NULL,
+      cron_expression TEXT NOT NULL,
+      payload         TEXT DEFAULT '{}',
+      enabled         INTEGER NOT NULL DEFAULT 1,
+      last_run        TEXT DEFAULT NULL,
+      run_count       INTEGER NOT NULL DEFAULT 0,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE,
+      FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- MARKETPLACE
+    CREATE TABLE IF NOT EXISTS marketplace_bots (
+      id            TEXT PRIMARY KEY,
+      author_id     TEXT NOT NULL,
+      name          TEXT NOT NULL,
+      description   TEXT DEFAULT '',
+      repo_url      TEXT NOT NULL,
+      branch        TEXT DEFAULT 'main',
+      entry_point   TEXT DEFAULT 'index.js',
+      category      TEXT DEFAULT 'other',
+      tags          TEXT DEFAULT '[]',
+      preview_image TEXT DEFAULT NULL,
+      documentation TEXT DEFAULT '',
+      status        TEXT NOT NULL DEFAULT 'pending',
+      downloads     INTEGER NOT NULL DEFAULT 0,
+      rating        REAL NOT NULL DEFAULT 0,
+      review_count  INTEGER NOT NULL DEFAULT 0,
+      created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS marketplace_reviews (
+      id          TEXT PRIMARY KEY,
+      listing_id  TEXT NOT NULL,
+      user_id     TEXT NOT NULL,
+      rating      INTEGER NOT NULL,
+      comment     TEXT DEFAULT '',
+      created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (listing_id) REFERENCES marketplace_bots(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(listing_id, user_id)
+    );
+
+    -- WEBHOOKS
+    CREATE TABLE IF NOT EXISTS webhooks (
+      id             TEXT PRIMARY KEY,
+      owner_id       TEXT NOT NULL,
+      bot_id         TEXT DEFAULT NULL,
+      name           TEXT NOT NULL,
+      url            TEXT NOT NULL,
+      type           TEXT NOT NULL DEFAULT 'custom',
+      events         TEXT DEFAULT '[]',
+      secret         TEXT NOT NULL,
+      enabled        INTEGER NOT NULL DEFAULT 1,
+      failure_count  INTEGER NOT NULL DEFAULT 0,
+      last_triggered TEXT DEFAULT NULL,
+      created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- CUSTOM DOMAINS
+    CREATE TABLE IF NOT EXISTS custom_domains (
+      id                  TEXT PRIMARY KEY,
+      bot_id              TEXT NOT NULL,
+      owner_id            TEXT NOT NULL,
+      domain              TEXT UNIQUE NOT NULL,
+      ssl_enabled         INTEGER NOT NULL DEFAULT 1,
+      verified            INTEGER NOT NULL DEFAULT 0,
+      verification_token  TEXT,
+      status              TEXT NOT NULL DEFAULT 'pending_verification',
+      created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE,
+      FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- BOT BACKUPS (enhanced)
+    CREATE TABLE IF NOT EXISTS bot_backups (
+      id          TEXT PRIMARY KEY,
+      bot_id      TEXT NOT NULL,
+      owner_id    TEXT NOT NULL,
+      label       TEXT DEFAULT '',
+      filename    TEXT NOT NULL,
+      size_bytes  INTEGER NOT NULL DEFAULT 0,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE,
+      FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- BOT VERSIONS (deploy history)
+    CREATE TABLE IF NOT EXISTS bot_versions (
+      id              TEXT PRIMARY KEY,
+      bot_id          TEXT NOT NULL,
+      owner_id        TEXT NOT NULL,
+      version_number  INTEGER NOT NULL,
+      is_current      INTEGER NOT NULL DEFAULT 0,
+      metadata        TEXT DEFAULT '{}',
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+    );
+
+    -- Additional indexes for new tables
+    CREATE INDEX IF NOT EXISTS idx_team_members_team ON team_members(team_id);
+    CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members(user_id);
+    CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_bot ON scheduled_tasks(bot_id);
+    CREATE INDEX IF NOT EXISTS idx_marketplace_status ON marketplace_bots(status);
+    CREATE INDEX IF NOT EXISTS idx_marketplace_category ON marketplace_bots(category);
+    CREATE INDEX IF NOT EXISTS idx_webhooks_owner ON webhooks(owner_id);
+    CREATE INDEX IF NOT EXISTS idx_custom_domains_bot ON custom_domains(bot_id);
+    CREATE INDEX IF NOT EXISTS idx_bot_backups_bot ON bot_backups(bot_id);
+    CREATE INDEX IF NOT EXISTS idx_bot_versions_bot ON bot_versions(bot_id);
+  `);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

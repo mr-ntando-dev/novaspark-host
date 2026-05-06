@@ -1,7 +1,7 @@
 {
   "name": "novaspark-v11",
-  "version": "11.1.0",
-  "description": "NovaSpark V11 — Next-gen WhatsApp Bot Hosting Platform. Process isolation, real-time dashboard, coin economy, Stripe-ready billing, SQLite embedded DB.",
+  "version": "12.0.0",
+  "description": "NovaSpark V12 — Advanced WhatsApp/Discord Bot Hosting Platform. Analytics, Teams, Scheduler, Marketplace, Webhooks, Custom Domains, Backups, Versioning, Process Isolation, Real-time Dashboard, Coin Economy, Stripe-ready Billing.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

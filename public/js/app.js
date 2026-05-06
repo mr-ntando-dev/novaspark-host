@@ -202,6 +202,13 @@ function navigate(page) {
     case 'notifications': renderNotifications(); break;
     case 'profile': renderProfile(); break;
     case 'settings': renderSettings(); break;
+    case 'analytics': renderAnalytics(); break;
+    case 'teams': renderTeams(); break;
+    case 'scheduler': renderScheduler(); break;
+    case 'marketplace': renderMarketplace(); break;
+    case 'webhooks': renderWebhooks(); break;
+    case 'domains': renderDomains(); break;
+    case 'backups': renderBackups(); break;
     case 'admin-users': renderAdminUsers(); break;
     case 'admin-system': renderAdminSystem(); break;
     case 'admin-codes': renderAdminCodes(); break;
@@ -1258,6 +1265,335 @@ window.addEventListener('unhandledrejection', function(event) {
   }
   event.preventDefault();
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// V12 ADVANCED FEATURES — PAGE RENDERERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── ANALYTICS ───────────────────────────────────────────────────────────────
+async function renderAnalytics() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-6"><i class="ri-bar-chart-2-line mr-2"></i>Bot Analytics</h2><div id="analytics-content"><p class="text-gray-400">Loading analytics...</p></div></div>`;
+  try {
+    const data = await api('/api/analytics/overview');
+    document.getElementById('analytics-content').innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div class="glass p-4 rounded-xl"><p class="text-xs text-gray-400 uppercase">Total Bots</p><p class="text-3xl font-bold text-white mt-1">${data.total_bots}</p></div>
+        <div class="glass p-4 rounded-xl"><p class="text-xs text-gray-400 uppercase">Running</p><p class="text-3xl font-bold text-green-400 mt-1">${data.running_bots}</p></div>
+        <div class="glass p-4 rounded-xl"><p class="text-xs text-gray-400 uppercase">Stopped</p><p class="text-3xl font-bold text-yellow-400 mt-1">${data.stopped_bots}</p></div>
+        <div class="glass p-4 rounded-xl"><p class="text-xs text-gray-400 uppercase">Errored</p><p class="text-3xl font-bold text-red-400 mt-1">${data.errored_bots}</p></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div class="glass p-4 rounded-xl"><p class="text-xs text-gray-400 uppercase">Total Uptime</p><p class="text-xl font-bold text-white mt-1">${formatSeconds(data.total_uptime_seconds)}</p></div>
+        <div class="glass p-4 rounded-xl"><p class="text-xs text-gray-400 uppercase">Total Restarts</p><p class="text-xl font-bold text-white mt-1">${data.total_restarts}</p></div>
+      </div>
+      <h3 class="text-lg font-semibold text-white mb-3">Bot Health Summary</h3>
+      <div class="space-y-2">
+        ${data.bots_summary.map(b => `
+          <div class="glass p-3 rounded-lg flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="w-2.5 h-2.5 rounded-full ${b.status === 'running' ? 'bg-green-400' : b.status === 'error' ? 'bg-red-400' : 'bg-gray-400'}"></span>
+              <span class="text-white font-medium">${b.name}</span>
+            </div>
+            <div class="flex items-center gap-4 text-sm text-gray-400">
+              <span>${b.status}</span>
+              <span>${formatSeconds(b.uptime_seconds)}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch (e) { document.getElementById('analytics-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+
+function formatSeconds(s) {
+  if (!s || s <= 0) return '0s';
+  const d = Math.floor(s / 86400); const h = Math.floor((s % 86400) / 3600); const m = Math.floor((s % 3600) / 60);
+  const parts = []; if (d > 0) parts.push(`${d}d`); if (h > 0) parts.push(`${h}h`); if (m > 0) parts.push(`${m}m`);
+  return parts.length > 0 ? parts.join(' ') : `${s}s`;
+}
+
+// ─── TEAMS ───────────────────────────────────────────────────────────────────
+async function renderTeams() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-6"><i class="ri-team-line mr-2"></i>Teams</h2><div id="teams-content"><p class="text-gray-400">Loading teams...</p></div></div>`;
+  try {
+    const data = await api('/api/teams');
+    document.getElementById('teams-content').innerHTML = `
+      <button onclick="showCreateTeamModal()" class="mb-6 px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm text-white transition"><i class="ri-add-line mr-1"></i>Create Team</button>
+      ${data.teams.length === 0 ? '<p class="text-gray-400">No teams yet. Create one to collaborate with others.</p>' : `
+        <div class="space-y-3">
+          ${data.teams.map(t => `
+            <div class="glass p-4 rounded-xl flex items-center justify-between">
+              <div>
+                <h3 class="text-white font-semibold">${t.name}</h3>
+                <p class="text-sm text-gray-400">${t.member_count} member${t.member_count > 1 ? 's' : ''} · Your role: ${t.my_role}</p>
+              </div>
+              <div class="flex gap-2">
+                <button onclick="viewTeam('${t.id}')" class="px-3 py-1.5 glass rounded-lg text-xs text-brand-300 hover:text-white transition">View</button>
+                ${t.my_role === 'owner' ? `<span class="text-xs text-gray-500 px-2 py-1.5">Code: ${t.invite_code}</span>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `}
+      <div id="team-modal" class="hidden"></div>
+    `;
+  } catch (e) { document.getElementById('teams-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+
+function showCreateTeamModal() {
+  const m = document.getElementById('team-modal');
+  m.classList.remove('hidden');
+  m.innerHTML = `
+    <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onclick="this.parentElement.classList.add('hidden')">
+      <div class="glass-strong p-6 rounded-2xl w-full max-w-md" onclick="event.stopPropagation()">
+        <h3 class="text-lg font-bold text-white mb-4">Create Team</h3>
+        <input id="team-name" type="text" placeholder="Team name" class="w-full mb-3 px-4 py-2.5 rounded-lg glass text-white text-sm" />
+        <input id="team-desc" type="text" placeholder="Description (optional)" class="w-full mb-4 px-4 py-2.5 rounded-lg glass text-white text-sm" />
+        <button onclick="createTeam()" class="w-full py-2.5 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm text-white font-medium transition">Create</button>
+      </div>
+    </div>
+  `;
+}
+
+async function createTeam() {
+  const name = document.getElementById('team-name').value;
+  const description = document.getElementById('team-desc').value;
+  if (!name) return toast('Team name required', 'error');
+  try {
+    await api('/api/teams', { method: 'POST', body: { name, description } });
+    toast('Team created!', 'success');
+    renderTeams();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function viewTeam(teamId) {
+  try {
+    const data = await api(`/api/teams/${teamId}`);
+    const m = document.getElementById('team-modal');
+    m.classList.remove('hidden');
+    m.innerHTML = `
+      <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onclick="this.parentElement.classList.add('hidden')">
+        <div class="glass-strong p-6 rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto" onclick="event.stopPropagation()">
+          <h3 class="text-lg font-bold text-white mb-2">${data.team.name}</h3>
+          <p class="text-sm text-gray-400 mb-4">${data.team.description || 'No description'}</p>
+          <p class="text-xs text-gray-500 mb-4">Invite Code: <code class="text-brand-300">${data.team.invite_code}</code></p>
+          <h4 class="text-sm font-semibold text-white mb-2">Members (${data.members.length})</h4>
+          <div class="space-y-2 mb-4">
+            ${data.members.map(m => `<div class="flex items-center gap-2 text-sm"><span>${m.avatar_emoji}</span><span class="text-white">${m.username}</span><span class="text-gray-500">(${m.role})</span></div>`).join('')}
+          </div>
+          ${data.my_role === 'owner' || data.my_role === 'admin' ? `
+            <div class="border-t border-white/10 pt-4">
+              <h4 class="text-sm font-semibold text-white mb-2">Invite Member</h4>
+              <div class="flex gap-2"><input id="invite-username" placeholder="Username" class="flex-1 px-3 py-2 rounded-lg glass text-white text-sm"><button onclick="inviteToTeam('${teamId}')" class="px-3 py-2 bg-brand-600 rounded-lg text-xs text-white">Invite</button></div>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function inviteToTeam(teamId) {
+  const username = document.getElementById('invite-username').value;
+  if (!username) return;
+  try { await api(`/api/teams/${teamId}/invite`, { method: 'POST', body: { username, role: 'developer' } }); toast('Member invited!', 'success'); viewTeam(teamId); } catch (e) { toast(e.message, 'error'); }
+}
+
+// ─── SCHEDULER ───────────────────────────────────────────────────────────────
+async function renderScheduler() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-6"><i class="ri-calendar-schedule-line mr-2"></i>Scheduled Tasks</h2><p class="text-gray-400 mb-4 text-sm">Automate bot actions with cron expressions. Restart, stop, backup, or trigger webhooks on a schedule.</p><div id="scheduler-content"><p class="text-gray-400">Loading...</p></div></div>`;
+  try {
+    const botsData = await api('/api/bots');
+    const bots = botsData.bots || [];
+    if (bots.length === 0) {
+      document.getElementById('scheduler-content').innerHTML = '<p class="text-gray-400">Deploy a bot first to create scheduled tasks.</p>';
+      return;
+    }
+    let allTasks = [];
+    for (const bot of bots) {
+      try { const t = await api(`/api/scheduler/bot/${bot.id}`); allTasks.push(...t.tasks.map(task => ({ ...task, bot_name: bot.name }))); } catch (_) {}
+    }
+    document.getElementById('scheduler-content').innerHTML = `
+      <button onclick="showCreateTaskModal()" class="mb-6 px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm text-white transition"><i class="ri-add-line mr-1"></i>New Scheduled Task</button>
+      ${allTasks.length === 0 ? '<p class="text-gray-400">No scheduled tasks yet.</p>' : `
+        <div class="space-y-3">
+          ${allTasks.map(t => `
+            <div class="glass p-4 rounded-xl">
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="text-white font-medium">${t.name}</h4>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs px-2 py-0.5 rounded-full ${t.enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}">${t.enabled ? 'Active' : 'Disabled'}</span>
+                  <button onclick="runTaskNow('${t.id}')" class="text-xs px-2 py-1 glass rounded text-brand-300 hover:text-white transition">Run Now</button>
+                  <button onclick="deleteTask('${t.id}')" class="text-xs px-2 py-1 glass rounded text-red-300 hover:text-red-400 transition">Delete</button>
+                </div>
+              </div>
+              <p class="text-xs text-gray-400">Bot: ${t.bot_name} · Action: ${t.action} · Cron: <code>${t.cron_expression}</code></p>
+              <p class="text-xs text-gray-500 mt-1">Runs: ${t.run_count || 0} · Last: ${t.last_run || 'Never'}</p>
+            </div>
+          `).join('')}
+        </div>
+      `}
+      <div id="scheduler-modal" class="hidden"></div>
+    `;
+  } catch (e) { document.getElementById('scheduler-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+
+async function runTaskNow(taskId) { try { await api(`/api/scheduler/${taskId}/run`, { method: 'POST' }); toast('Task executed', 'success'); } catch (e) { toast(e.message, 'error'); } }
+async function deleteTask(taskId) { try { await api(`/api/scheduler/${taskId}`, { method: 'DELETE' }); toast('Task deleted', 'success'); renderScheduler(); } catch (e) { toast(e.message, 'error'); } }
+
+function showCreateTaskModal() {
+  toast('Use the API to create scheduled tasks: POST /api/scheduler with bot_id, name, action, cron_expression', 'info');
+}
+
+// ─── MARKETPLACE ─────────────────────────────────────────────────────────────
+async function renderMarketplace() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-6"><i class="ri-store-3-line mr-2"></i>Bot Marketplace</h2><div class="flex gap-2 mb-6"><input id="mp-search" type="text" placeholder="Search bots..." class="flex-1 px-4 py-2.5 rounded-lg glass text-white text-sm" onkeyup="if(event.key==='Enter')searchMarketplace()"><button onclick="searchMarketplace()" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm text-white transition">Search</button></div><div id="mp-content"><p class="text-gray-400">Loading marketplace...</p></div></div>`;
+  searchMarketplace();
+}
+
+async function searchMarketplace(page = 1) {
+  try {
+    const search = document.getElementById('mp-search')?.value || '';
+    const data = await api(`/api/marketplace?search=${encodeURIComponent(search)}&page=${page}`);
+    document.getElementById('mp-content').innerHTML = data.bots.length === 0 
+      ? '<p class="text-gray-400">No bots found in the marketplace yet. Be the first to publish!</p>'
+      : `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          ${data.bots.map(b => `
+            <div class="glass p-4 rounded-xl hover:border-brand-500/30 border border-transparent transition cursor-pointer" onclick="viewMarketplaceListing('${b.id}')">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-2xl">${b.author_avatar || '🤖'}</span>
+                <div><h4 class="text-white font-semibold text-sm">${b.name}</h4><p class="text-xs text-gray-500">by ${b.author_name}</p></div>
+              </div>
+              <p class="text-xs text-gray-400 line-clamp-2 mb-3">${b.description}</p>
+              <div class="flex items-center justify-between text-xs text-gray-500">
+                <span><i class="ri-download-2-line"></i> ${b.downloads}</span>
+                <span><i class="ri-star-fill text-yellow-400"></i> ${b.rating > 0 ? b.rating.toFixed(1) : 'N/A'}</span>
+                <span class="px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-300">${b.category}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        ${data.total_pages > 1 ? `<div class="flex justify-center gap-2 mt-6">${Array.from({length: data.total_pages}, (_, i) => `<button onclick="searchMarketplace(${i+1})" class="px-3 py-1 rounded glass text-xs ${i+1 === data.page ? 'text-brand-400' : 'text-gray-400'}">${i+1}</button>`).join('')}</div>` : ''}
+      `;
+  } catch (e) { document.getElementById('mp-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+
+async function viewMarketplaceListing(id) {
+  try {
+    const data = await api(`/api/marketplace/${id}`);
+    toast(`${data.bot.name}: ${data.bot.description}. Use "Deploy from URL" with repo: ${data.bot.repo_url}`, 'info');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ─── WEBHOOKS ────────────────────────────────────────────────────────────────
+async function renderWebhooks() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-6"><i class="ri-webhook-line mr-2"></i>Webhooks</h2><p class="text-gray-400 text-sm mb-4">Get notified about bot events via Discord, Slack, or custom HTTP endpoints.</p><div id="webhooks-content"><p class="text-gray-400">Loading...</p></div></div>`;
+  try {
+    const data = await api('/api/webhooks');
+    document.getElementById('webhooks-content').innerHTML = `
+      <button onclick="showCreateWebhookModal()" class="mb-6 px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm text-white transition"><i class="ri-add-line mr-1"></i>Add Webhook</button>
+      ${data.webhooks.length === 0 ? '<p class="text-gray-400">No webhooks configured.</p>' : `
+        <div class="space-y-3">
+          ${data.webhooks.map(w => `
+            <div class="glass p-4 rounded-xl">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h4 class="text-white font-medium">${w.name}</h4>
+                  <p class="text-xs text-gray-400 mt-1">${w.url.slice(0, 50)}... · Type: ${w.type} · ${w.events.length} events</p>
+                </div>
+                <div class="flex gap-2">
+                  <span class="text-xs px-2 py-0.5 rounded-full ${w.enabled ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">${w.enabled ? 'Active' : 'Disabled'}</span>
+                  <button onclick="testWebhook('${w.id}')" class="text-xs px-2 py-1 glass rounded text-brand-300 hover:text-white transition">Test</button>
+                  <button onclick="deleteWebhook('${w.id}')" class="text-xs px-2 py-1 glass rounded text-red-300 hover:text-red-400 transition">Delete</button>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `}
+      <div id="webhook-modal" class="hidden"></div>
+    `;
+  } catch (e) { document.getElementById('webhooks-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+
+function showCreateWebhookModal() {
+  toast('Use the API to create webhooks: POST /api/webhooks with name, url, type (discord/slack/custom), events', 'info');
+}
+async function testWebhook(id) { try { await api(`/api/webhooks/${id}/test`, { method: 'POST' }); toast('Test webhook sent!', 'success'); } catch (e) { toast(e.message, 'error'); } }
+async function deleteWebhook(id) { try { await api(`/api/webhooks/${id}`, { method: 'DELETE' }); toast('Webhook deleted', 'success'); renderWebhooks(); } catch (e) { toast(e.message, 'error'); } }
+
+// ─── DOMAINS ─────────────────────────────────────────────────────────────────
+async function renderDomains() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-6"><i class="ri-global-line mr-2"></i>Custom Domains</h2><p class="text-gray-400 text-sm mb-4">Map custom domains to your bots for webhook callbacks and web panels.</p><div id="domains-content"><p class="text-gray-400">Loading...</p></div></div>`;
+  try {
+    const data = await api('/api/domains');
+    document.getElementById('domains-content').innerHTML = `
+      <button onclick="showAddDomainModal()" class="mb-6 px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm text-white transition"><i class="ri-add-line mr-1"></i>Add Domain</button>
+      ${data.domains.length === 0 ? '<p class="text-gray-400">No custom domains configured.</p>' : `
+        <div class="space-y-3">
+          ${data.domains.map(d => `
+            <div class="glass p-4 rounded-xl flex items-center justify-between">
+              <div>
+                <h4 class="text-white font-medium">${d.domain}</h4>
+                <p class="text-xs text-gray-400 mt-1">Bot: ${d.bot_name || 'Unknown'} · SSL: ${d.ssl_enabled ? '✓' : '✗'}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs px-2 py-0.5 rounded-full ${d.verified ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">${d.verified ? 'Verified' : 'Pending'}</span>
+                ${!d.verified ? `<button onclick="verifyDomain('${d.id}')" class="text-xs px-2 py-1 glass rounded text-brand-300">Verify</button>` : ''}
+                <button onclick="deleteDomain('${d.id}')" class="text-xs px-2 py-1 glass rounded text-red-300">Remove</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `}
+    `;
+  } catch (e) { document.getElementById('domains-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+
+function showAddDomainModal() { toast('Use API: POST /api/domains with bot_id, domain', 'info'); }
+async function verifyDomain(id) { try { await api(`/api/domains/${id}/verify`, { method: 'POST', body: { force: true } }); toast('Domain verified!', 'success'); renderDomains(); } catch (e) { toast(e.message, 'error'); } }
+async function deleteDomain(id) { try { await api(`/api/domains/${id}`, { method: 'DELETE' }); toast('Domain removed', 'success'); renderDomains(); } catch (e) { toast(e.message, 'error'); } }
+
+// ─── BACKUPS ─────────────────────────────────────────────────────────────────
+async function renderBackups() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-6"><i class="ri-hard-drive-2-line mr-2"></i>Backups & Versioning</h2><p class="text-gray-400 text-sm mb-4">Create backups of your bots, view deploy history, and rollback to previous versions.</p><div id="backups-content"><p class="text-gray-400">Loading...</p></div></div>`;
+  try {
+    const botsData = await api('/api/bots');
+    const bots = botsData.bots || [];
+    if (bots.length === 0) {
+      document.getElementById('backups-content').innerHTML = '<p class="text-gray-400">Deploy a bot first.</p>';
+      return;
+    }
+    let html = '';
+    for (const bot of bots) {
+      let backups = [], versions = [];
+      try { backups = (await api(`/api/backups/${bot.id}`)).backups || []; } catch(_) {}
+      try { versions = (await api(`/api/versions/${bot.id}`)).versions || []; } catch(_) {}
+      html += `
+        <div class="glass p-4 rounded-xl mb-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-white font-semibold">${bot.name}</h3>
+            <button onclick="createBackup('${bot.id}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 rounded-lg text-xs text-white transition">Create Backup</button>
+          </div>
+          ${backups.length > 0 ? `<div class="space-y-2 mb-3"><p class="text-xs text-gray-500 uppercase">Backups (${backups.length})</p>${backups.slice(0, 5).map(b => `<div class="flex items-center justify-between text-xs text-gray-400 p-2 rounded bg-white/5"><span>${b.label} (${b.size_formatted})</span><div class="flex gap-2"><button onclick="restoreBackup('${bot.id}','${b.id}')" class="text-brand-300 hover:text-white">Restore</button></div></div>`).join('')}</div>` : ''}
+          ${versions.length > 0 ? `<div class="space-y-2"><p class="text-xs text-gray-500 uppercase">Versions (${versions.length})</p>${versions.slice(0, 5).map(v => `<div class="flex items-center justify-between text-xs text-gray-400 p-2 rounded bg-white/5"><span>v${v.version_number} ${v.is_current ? '<span class="text-green-400">(current)</span>' : ''}</span><button onclick="rollbackVersion('${bot.id}','${v.id}')" class="text-brand-300 hover:text-white ${v.is_current ? 'hidden' : ''}">Rollback</button></div>`).join('')}</div>` : ''}
+        </div>
+      `;
+    }
+    document.getElementById('backups-content').innerHTML = html || '<p class="text-gray-400">No backup data yet.</p>';
+  } catch (e) { document.getElementById('backups-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+
+async function createBackup(botId) { try { await api(`/api/backups/${botId}`, { method: 'POST', body: {} }); toast('Backup created!', 'success'); renderBackups(); } catch (e) { toast(e.message, 'error'); } }
+async function restoreBackup(botId, backupId) { if (!confirm('Restore this backup? Current files will be replaced.')) return; try { await api(`/api/backups/${botId}/restore/${backupId}`, { method: 'POST' }); toast('Backup restored!', 'success'); } catch (e) { toast(e.message, 'error'); } }
+async function rollbackVersion(botId, versionId) { if (!confirm('Rollback to this version?')) return; try { await api(`/api/versions/${botId}/rollback/${versionId}`, { method: 'POST' }); toast('Rolled back!', 'success'); renderBackups(); } catch (e) { toast(e.message, 'error'); } }
 
 // Wait for DOM before calling init so auth modal elements exist
 document.addEventListener('DOMContentLoaded', () => {

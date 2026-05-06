@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="spark-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="50%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+    <linearGradient id="inner-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c4b5fd"/>
+      <stop offset="100%" stop-color="#e9d5ff"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#0f0a2e"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#bg-grad)" stroke="url(#spark-grad)" stroke-width="4"/>
+  
+  <!-- Outer ring glow -->
+  <circle cx="256" cy="256" r="220" fill="none" stroke="url(#spark-grad)" stroke-width="1.5" opacity="0.4"/>
+  
+  <!-- Lightning bolt / spark - main icon -->
+  <path d="M 296 80 L 196 240 L 260 240 L 216 432 L 356 220 L 280 220 L 336 80 Z" 
+        fill="url(#spark-grad)" filter="url(#glow)"/>
+  
+  <!-- Inner highlight on bolt -->
+  <path d="M 286 120 L 218 240 L 262 240 L 232 380 L 330 228 L 282 228 L 320 120 Z" 
+        fill="url(#inner-grad)" opacity="0.3"/>
+  
+  <!-- Small spark particles -->
+  <circle cx="160" cy="150" r="4" fill="#818cf8" opacity="0.8"/>
+  <circle cx="380" cy="130" r="3" fill="#a855f7" opacity="0.7"/>
+  <circle cx="130" cy="320" r="3.5" fill="#6366f1" opacity="0.6"/>
+  <circle cx="400" cy="350" r="4" fill="#818cf8" opacity="0.7"/>
+  <circle cx="350" cy="400" r="2.5" fill="#c4b5fd" opacity="0.5"/>
+  <circle cx="170" cy="400" r="3" fill="#a855f7" opacity="0.6"/>
+  
+  <!-- Small star bursts -->
+  <path d="M 150 180 L 152 174 L 154 180 L 160 182 L 154 184 L 152 190 L 150 184 L 144 182 Z" fill="#c4b5fd" opacity="0.7"/>
+  <path d="M 370 160 L 372 154 L 374 160 L 380 162 L 374 164 L 372 170 L 370 164 L 364 162 Z" fill="#e9d5ff" opacity="0.6"/>
+  <path d="M 390 380 L 392 374 L 394 380 L 400 382 L 394 384 L 392 390 L 390 384 L 384 382 Z" fill="#818cf8" opacity="0.5"/>
+</svg>

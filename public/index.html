@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NovaSpark V11.1 - Bot Hosting Platform</title>
+  <title>NovaSpark V12 - Advanced Bot Hosting Platform</title>
+  <link rel="icon" type="image/svg+xml" href="/logo.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="/logo-192.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -59,12 +62,10 @@
       <!-- Logo -->
       <div class="p-6 border-b border-white/5">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-purple-500 flex items-center justify-center">
-            <i class="ri-flashlight-fill text-white text-xl"></i>
-          </div>
+          <img src="/logo.svg" alt="NovaSpark" class="w-10 h-10 rounded-xl">
           <div>
             <h1 class="text-lg font-bold text-white">NovaSpark</h1>
-            <span class="text-xs text-brand-400 font-mono">v11.1.0</span>
+            <span class="text-xs text-brand-400 font-mono">v12.0.0</span>
           </div>
         </div>
       </div>
@@ -93,6 +94,31 @@
           <i class="ri-notification-3-line text-lg"></i> Notifications
           <span id="notif-badge" class="hidden ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full"></span>
         </a>
+
+        <div class="pt-4 mt-4 border-t border-white/5">
+          <p class="text-xs text-gray-500 px-4 mb-2 uppercase tracking-wider">Advanced</p>
+          <a href="#" onclick="event.preventDefault(); navigate('analytics')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="analytics">
+            <i class="ri-bar-chart-2-line text-lg"></i> Analytics
+          </a>
+          <a href="#" onclick="event.preventDefault(); navigate('teams')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="teams">
+            <i class="ri-team-line text-lg"></i> Teams
+          </a>
+          <a href="#" onclick="event.preventDefault(); navigate('scheduler')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="scheduler">
+            <i class="ri-calendar-schedule-line text-lg"></i> Scheduler
+          </a>
+          <a href="#" onclick="event.preventDefault(); navigate('marketplace')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="marketplace">
+            <i class="ri-store-3-line text-lg"></i> Marketplace
+          </a>
+          <a href="#" onclick="event.preventDefault(); navigate('webhooks')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="webhooks">
+            <i class="ri-webhook-line text-lg"></i> Webhooks
+          </a>
+          <a href="#" onclick="event.preventDefault(); navigate('domains')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="domains">
+            <i class="ri-global-line text-lg"></i> Domains
+          </a>
+          <a href="#" onclick="event.preventDefault(); navigate('backups')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="backups">
+            <i class="ri-hard-drive-2-line text-lg"></i> Backups
+          </a>
+        </div>
 
         <div class="pt-4 mt-4 border-t border-white/5">
           <p class="text-xs text-gray-500 px-4 mb-2 uppercase tracking-wider">Account</p>

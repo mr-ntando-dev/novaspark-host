@@ -24,6 +24,14 @@ const economyRoutes = require('./src/routes/economy');
 const adminRoutes = require('./src/routes/admin');
 const notificationRoutes = require('./src/routes/notifications');
 const repoConfigRoutes = require('./src/routes/repo-config');
+const analyticsRoutes = require('./src/routes/analytics');
+const teamsRoutes = require('./src/routes/teams');
+const schedulerRoutes = require('./src/routes/scheduler');
+const marketplaceRoutes = require('./src/routes/marketplace');
+const webhooksRoutes = require('./src/routes/webhooks');
+const domainsRoutes = require('./src/routes/domains');
+const backupsRoutes = require('./src/routes/backups');
+const versioningRoutes = require('./src/routes/versioning');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -62,15 +70,24 @@ app.use('/api/economy', economyRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/repo-config', repoConfigRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/teams', teamsRoutes);
+app.use('/api/scheduler', schedulerRoutes);
+app.use('/api/marketplace', marketplaceRoutes);
+app.use('/api/webhooks', webhooksRoutes);
+app.use('/api/domains', domainsRoutes);
+app.use('/api/backups', backupsRoutes);
+app.use('/api/versions', versioningRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
   const running = getRunningBots();
   res.json({
     status: 'ok',
-    version: '11.1.0',
+    version: '12.0.0',
     uptime: process.uptime(),
     running_bots: running.length,
+    features: ['analytics', 'teams', 'scheduler', 'marketplace', 'webhooks', 'domains', 'backups', 'versioning'],
     timestamp: new Date().toISOString()
   });
 });
@@ -288,19 +305,25 @@ cron.schedule('*/10 * * * *', () => {
 server.listen(PORT, async () => {
   console.log('');
   console.log(chalk.bold.magenta('  ╔══════════════════════════════════════════════╗'));
-  console.log(chalk.bold.magenta('  ║          NOVASPARK V11  ⚡  ONLINE          ║'));
+  console.log(chalk.bold.magenta('  ║        NOVASPARK V12  ⚡  ONLINE            ║'));
   console.log(chalk.bold.magenta('  ╚══════════════════════════════════════════════╝'));
   console.log('');
   console.log(chalk.cyan(`  🌐 Server:    http://localhost:${PORT}`));
   console.log(chalk.cyan(`  🔌 WebSocket: ws://localhost:${PORT}/ws`));
   console.log(chalk.cyan(`  💾 Database:  SQLite (WAL mode)`));
   console.log(chalk.cyan(`  🏥 Health:    /api/health`));
+  console.log(chalk.cyan(`  📊 Features:  Analytics, Teams, Scheduler, Marketplace`));
+  console.log(chalk.cyan(`                Webhooks, Domains, Backups, Versioning`));
   console.log('');
 
   await bootstrapAdmin();
   startWatchdog();
 
-  Alerts.systemAlert('NovaSpark V11 started successfully.');
+  // Initialize scheduled tasks from DB
+  const { initScheduler } = require('./src/routes/scheduler');
+  initScheduler();
+
+  Alerts.systemAlert('NovaSpark V12 started successfully.');
   console.log(chalk.green('  ✅ All systems nominal. Ready to host bots.\n'));
 });
 
