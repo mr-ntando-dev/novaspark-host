@@ -1,7 +1,7 @@
 {
-  "name": "novaspark-v11",
-  "version": "12.0.0",
-  "description": "NovaSpark V12 — Advanced WhatsApp/Discord Bot Hosting Platform. Analytics, Teams, Scheduler, Marketplace, Webhooks, Custom Domains, Backups, Versioning, Process Isolation, Real-time Dashboard, Coin Economy, Stripe-ready Billing.",
+  "name": "novaspark-v13",
+  "version": "13.0.0",
+  "description": "NovaSpark V13 — Advanced Bot Hosting Platform. Live Terminal, AI Anomaly Detection, Event Bus, Plugin System, Secret Vault, CI/CD Pipelines, Status Pages, Resource Quotas, Rate Limiter, Geo Regions, Analytics, Teams, Scheduler, Marketplace, Webhooks, Custom Domains, Backups, Versioning, Process Isolation, Real-time Dashboard, Coin Economy, Stripe-ready Billing.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

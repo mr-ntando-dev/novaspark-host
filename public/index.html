@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NovaSpark V12 - Advanced Bot Hosting Platform</title>
+  <title>NovaSpark V13 - Advanced Bot Hosting Platform</title>
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
   <link rel="apple-touch-icon" sizes="192x192" href="/logo-192.png">
@@ -65,7 +65,7 @@
           <img src="/logo.svg" alt="NovaSpark" class="w-10 h-10 rounded-xl">
           <div>
             <h1 class="text-lg font-bold text-white">NovaSpark</h1>
-            <span class="text-xs text-brand-400 font-mono">v12.0.0</span>
+            <span class="text-xs text-brand-400 font-mono">v13.0.0</span>
           </div>
         </div>
       </div>
@@ -121,6 +121,40 @@
         </div>
 
         <div class="pt-4 mt-4 border-t border-white/5">
+          <p class="text-xs text-gray-500 px-4 mb-2 uppercase tracking-wider">V13 Pro</p>
+          <a href="#" onclick="event.preventDefault(); navigate('terminal')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="terminal">
+            <i class="ri-terminal-box-line text-lg"></i> Terminal
+          </a>
+          <a href="#" onclick="event.preventDefault(); navigate('anomaly')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="anomaly">
+            <i class="ri-brain-line text-lg"></i> AI Monitor
+          </a>
+          <a href="#" onclick="event.preventDefault(); navigate('event-bus')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="event-bus">
+            <i class="ri-links-line text-lg"></i> Event Bus
+          </a>
+          <a href="#" onclick="event.preventDefault(); navigate('plugins')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="plugins">
+            <i class="ri-plug-line text-lg"></i> Plugins
+          </a>
+          <a href="#" onclick="event.preventDefault(); navigate('vault')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="vault">
+            <i class="ri-shield-keyhole-line text-lg"></i> Vault
+          </a>
+          <a href="#" onclick="event.preventDefault(); navigate('pipelines')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="pipelines">
+            <i class="ri-git-merge-line text-lg"></i> Pipelines
+          </a>
+          <a href="#" onclick="event.preventDefault(); navigate('status-pages')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="status-pages">
+            <i class="ri-pulse-line text-lg"></i> Status Pages
+          </a>
+          <a href="#" onclick="event.preventDefault(); navigate('quotas')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="quotas">
+            <i class="ri-speed-line text-lg"></i> Quotas
+          </a>
+          <a href="#" onclick="event.preventDefault(); navigate('rate-limiter')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="rate-limiter">
+            <i class="ri-shield-flash-line text-lg"></i> Rate Limiter
+          </a>
+          <a href="#" onclick="event.preventDefault(); navigate('regions')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="regions">
+            <i class="ri-earth-line text-lg"></i> Regions
+          </a>
+        </div>
+
+        <div class="pt-4 mt-4 border-t border-white/5">
           <p class="text-xs text-gray-500 px-4 mb-2 uppercase tracking-wider">Account</p>
           <a href="#" onclick="event.preventDefault(); navigate('profile')" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm" data-page="profile">
             <i class="ri-user-3-line text-lg"></i> Profile
@@ -168,7 +202,7 @@
       <!-- Top bar (mobile) -->
       <header class="lg:hidden sticky top-0 z-30 glass-strong px-4 py-3 flex items-center justify-between">
         <button onclick="toggleSidebar()" class="text-white"><i class="ri-menu-line text-xl"></i></button>
-        <span class="font-bold text-brand-400">NovaSpark V11</span>
+        <span class="font-bold text-brand-400">NovaSpark V13</span>
         <button onclick="navigate('notifications')" class="text-white relative">
           <i class="ri-notification-3-line text-xl"></i>
           <span id="mobile-notif-dot" class="hidden absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
@@ -189,7 +223,7 @@
         <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-brand-500 to-purple-500 flex items-center justify-center mb-4">
           <i class="ri-flashlight-fill text-white text-3xl"></i>
         </div>
-        <h2 class="text-2xl font-bold text-white">NovaSpark V11</h2>
+        <h2 class="text-2xl font-bold text-white">NovaSpark V13</h2>
         <p class="text-gray-400 mt-1">Next-gen bot hosting platform</p>
       </div>
 
