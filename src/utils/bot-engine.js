@@ -441,9 +441,67 @@ function getSessionDir(bot, botDir) {
 
 function restoreSession(botId, botDir, bot) {
   const sessionBackup = path.join(SESSIONS_DIR, `${botId}.json`);
+  const targetDir = getSessionDir(bot, botDir);
+
+  // ── Priority 1: Decode SESSION_ID env var into creds.json ────────────────
+  // Many Baileys bots encode creds.json as base64 in SESSION_ID (or SESSION).
+  // We decode it here and write creds.json BEFORE the bot starts, so it
+  // connects without a QR scan even on first deploy.
+  let envVars = {};
+  try { envVars = JSON.parse(bot.env_vars || '{}'); } catch (_) {}
+
+  const rawSession = envVars['SESSION_ID'] || envVars['SESSION'] || envVars['CREDS'] || '';
+  if (rawSession && rawSession.trim().length > 20) {
+    try {
+      // Strip known bot-specific prefixes (e.g. "NovaSpark~", "LEVANTER~", "SUBZERO~")
+      let b64 = rawSession.trim().replace(/^[A-Z_]+~/i, '');
+
+      // Try to decode as base64 → JSON (creds.json)
+      let decoded;
+      try {
+        const buf = Buffer.from(b64, 'base64');
+        // Try gzip first (Levanter style)
+        try {
+          const zlib = require('zlib');
+          decoded = zlib.gunzipSync(buf).toString('utf8');
+        } catch (_) {
+          decoded = buf.toString('utf8');
+        }
+      } catch (_) {}
+
+      if (decoded) {
+        let creds;
+        try { creds = JSON.parse(decoded); } catch (_) {}
+
+        if (creds && (creds.me || creds.noiseKey || creds.signedIdentityKey || creds.registrationId)) {
+          // Valid Baileys creds.json structure — write it
+          if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+          fs.writeFileSync(path.join(targetDir, 'creds.json'), decoded, 'utf8');
+          BotLogs.add(botId, 'info', 'Decoded SESSION_ID into creds.json — bot will connect without QR scan');
+          return; // Skip backup restore, session ID takes priority
+        }
+
+        // Maybe it's a zip of the full session folder
+        try {
+          const AdmZip = require('adm-zip');
+          const buf = Buffer.from(b64, 'base64');
+          const zip = new AdmZip(buf);
+          if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+          zip.extractAllTo(targetDir, true);
+          BotLogs.add(botId, 'info', 'Extracted SESSION_ID zip into session folder — bot will connect without QR scan');
+          return;
+        } catch (_) {}
+
+        BotLogs.add(botId, 'warn', 'SESSION_ID set but could not decode to valid creds — will fall back to QR or session backup');
+      }
+    } catch (e) {
+      BotLogs.add(botId, 'warn', `SESSION_ID decode error: ${e.message}`);
+    }
+  }
+
+  // ── Priority 2: Restore from previous session backup ─────────────────────
   if (!fs.existsSync(sessionBackup)) return;
 
-  const targetDir = getSessionDir(bot, botDir);
   try {
     const files = JSON.parse(fs.readFileSync(sessionBackup, 'utf8'));
     if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });

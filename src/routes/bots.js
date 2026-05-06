@@ -256,4 +256,104 @@ router.put('/:id/env', authenticate, (req, res) => {
   res.json({ message: 'Environment variables updated' });
 });
 
+// ─── SET SESSION ID ──────────────────────────────────────────────────────────
+// Shortcut: set SESSION_ID in env vars AND immediately decode + write creds.json
+// into the bot's session folder. Supports NovaSpark~, LEVANTER~, SUBZERO~ prefixes
+// and raw base64. The bot will use the new session next time it starts.
+router.post('/:id/session-id', authenticate, async (req, res) => {
+  const bot = Bots.findById(req.params.id);
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+  if (bot.owner_id !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const { session_id } = req.body;
+  if (!session_id || typeof session_id !== 'string' || session_id.trim().length < 10) {
+    return res.status(400).json({ error: 'session_id is required and must be a valid encoded session string' });
+  }
+
+  // Save SESSION_ID into the bot's env vars
+  let envVars = {};
+  try { envVars = JSON.parse(bot.env_vars || '{}'); } catch (_) {}
+  envVars['SESSION_ID'] = session_id.trim();
+  Bots.update(req.params.id, { env_vars: JSON.stringify(envVars) });
+
+  // If bot files exist, immediately decode and write creds.json
+  const { BOTS_DIR, setWsBroadcast: _unused, ...botEngine } = require('../utils/bot-engine');
+  const botDir = path.join(BOTS_DIR, req.params.id);
+  if (fs.existsSync(botDir)) {
+    try {
+      let b64 = session_id.trim().replace(/^[A-Z_a-z]+~/i, '');
+      let decoded;
+      try {
+        const buf = Buffer.from(b64, 'base64');
+        try {
+          const zlib = require('zlib');
+          decoded = zlib.gunzipSync(buf).toString('utf8');
+        } catch (_) {
+          decoded = buf.toString('utf8');
+        }
+      } catch (_) {}
+
+      if (decoded) {
+        let creds;
+        try { creds = JSON.parse(decoded); } catch (_) {}
+        if (creds && (creds.me || creds.noiseKey || creds.signedIdentityKey || creds.registrationId)) {
+          const sessionDir = bot.session_dir
+            ? path.join(botDir, bot.session_dir)
+            : path.join(botDir, 'auth_info_baileys');
+          if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
+          fs.writeFileSync(path.join(sessionDir, 'creds.json'), decoded, 'utf8');
+          BotLogs.add(req.params.id, 'info', 'SESSION_ID decoded and written to creds.json — restart bot to connect');
+          return res.json({ message: 'Session ID saved and decoded. Restart your bot to connect without QR scan.', decoded: true });
+        }
+      }
+    } catch (e) {
+      BotLogs.add(req.params.id, 'warn', `SESSION_ID set but decode failed: ${e.message}`);
+    }
+  }
+
+  res.json({ message: 'Session ID saved. It will be decoded automatically on next bot start.', decoded: false });
+});
+
+// ─── EXPORT SESSION ID ───────────────────────────────────────────────────────
+// Generate a SESSION_ID string from the bot's current creds.json so the user
+// can copy it for use in other bots or as a backup.
+router.get('/:id/session-id', authenticate, (req, res) => {
+  const bot = Bots.findById(req.params.id);
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+  if (bot.owner_id !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const { BOTS_DIR } = require('../utils/bot-engine');
+  const botDir = path.join(BOTS_DIR, req.params.id);
+  const sessionDirs = [
+    bot.session_dir ? path.join(botDir, bot.session_dir) : null,
+    path.join(botDir, 'auth_info_baileys'),
+    path.join(botDir, 'session'),
+    path.join(botDir, '.session'),
+    path.join(botDir, 'auth'),
+  ].filter(Boolean);
+
+  for (const sessionDir of sessionDirs) {
+    const credsPath = path.join(sessionDir, 'creds.json');
+    if (fs.existsSync(credsPath)) {
+      try {
+        const creds = fs.readFileSync(credsPath, 'utf8');
+        const b64 = Buffer.from(creds).toString('base64');
+        const sessionId = `NovaSpark~${b64}`;
+        return res.json({
+          session_id: sessionId,
+          message: 'Copy this SESSION_ID and paste it into your next bot deployment. Keep it secret — it gives full WhatsApp access.'
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Could not read session: ${e.message}` });
+      }
+    }
+  }
+
+  res.status(404).json({ error: 'No active session found. Bot must be connected (run + scanned QR) before you can export a session ID.' });
+});
+
 module.exports = router;

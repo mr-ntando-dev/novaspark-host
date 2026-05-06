@@ -279,6 +279,28 @@ async function manageEnv(botId) {
       <button onclick="navigate('bots')" class="text-gray-400 hover:text-white transition"><i class="ri-arrow-left-line text-xl"></i></button>
       <h2 class="text-2xl font-bold text-white">Environment Variables</h2>
     </div>
+
+    <!-- SESSION ID SHORTCUT PANEL -->
+    <div class="glass rounded-xl p-6 max-w-2xl border border-green-500/20">
+      <div class="flex items-start gap-3 mb-4">
+        <span class="text-2xl">📱</span>
+        <div>
+          <h3 class="font-semibold text-white">WhatsApp Session ID</h3>
+          <p class="text-xs text-gray-400 mt-0.5">Skip QR scanning by pasting your session ID. Supports NovaSpark~, LEVANTER~, SUBZERO~ formats and raw base64.</p>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <input id="session-id-input" type="text" placeholder="Paste SESSION_ID here (e.g. NovaSpark~AAAA...)" class="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-xs focus:border-green-500 focus:outline-none">
+        <button onclick="applySessionId('${botId}')" class="bg-green-500/20 text-green-400 border border-green-500/30 px-4 py-2 rounded-lg text-sm hover:bg-green-500/30 transition whitespace-nowrap">Apply &amp; Restart</button>
+      </div>
+      <div class="mt-3 flex items-center gap-3">
+        <button onclick="exportSessionId('${botId}')" class="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"><i class="ri-download-line"></i> Export my current session ID</button>
+        <span class="text-gray-600 text-xs">|</span>
+        <span class="text-xs text-gray-500">Export after connecting via QR to reuse the session elsewhere</span>
+      </div>
+    </div>
+
+    <!-- ENV VARS -->
     <div class="glass rounded-xl p-6 max-w-2xl space-y-4">
       <p class="text-sm text-gray-400"><i class="ri-information-line"></i> These variables are injected into your bot's process at startup. Changes take effect on next restart.</p>
       <div id="env-manage-rows" class="space-y-2"><p class="text-gray-500 text-sm">Loading...</p></div>
@@ -290,8 +312,6 @@ async function manageEnv(botId) {
     </div>
   </div>`;
   try {
-    // Fetch real (unmasked) env vars — use the PUT endpoint trick: we read what the user already saved
-    // We only have a masked GET, so we load masked values as placeholders
     const data = await api(`/api/bots/${botId}/env`);
     const rows = document.getElementById('env-manage-rows');
     rows.innerHTML = '';
@@ -301,6 +321,43 @@ async function manageEnv(botId) {
     } else {
       entries.forEach(([k, v]) => addEnvManageRow(k, v));
     }
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function applySessionId(botId) {
+  const input = document.getElementById('session-id-input');
+  const sessionId = input ? input.value.trim() : '';
+  if (!sessionId) { toast('Paste a session ID first', 'error'); return; }
+  try {
+    const data = await api(`/api/bots/${botId}/session-id`, { method: 'POST', body: { session_id: sessionId } });
+    toast(data.message, 'success');
+    if (data.decoded) {
+      // Restart bot so it picks up the new session
+      await api(`/api/bots/${botId}/restart`, { method: 'POST' }).catch(() => {});
+      toast('Bot restarting with new session...', 'info');
+      setTimeout(() => navigate('bots'), 1500);
+    }
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function exportSessionId(botId) {
+  try {
+    const data = await api(`/api/bots/${botId}/session-id`);
+    // Show copyable modal
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
+    modal.innerHTML = `
+      <div class="glass rounded-2xl p-6 max-w-lg w-full space-y-4 border border-brand-500/30">
+        <div class="flex items-center justify-between">
+          <h3 class="font-bold text-white">Your Session ID</h3>
+          <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-white"><i class="ri-close-line text-xl"></i></button>
+        </div>
+        <p class="text-xs text-yellow-400"><i class="ri-alert-line"></i> Keep this secret. Anyone with this string can access your WhatsApp account.</p>
+        <textarea readonly class="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-green-400 font-mono text-xs h-28 resize-none focus:outline-none">${escapeHtml(data.session_id)}</textarea>
+        <button onclick="navigator.clipboard.writeText(${JSON.stringify(data.session_id)}).then(()=>toast('Copied!','success')); this.closest('.fixed').remove()" class="w-full bg-brand-500/20 text-brand-400 border border-brand-500/30 rounded-lg py-2 hover:bg-brand-500/30 transition text-sm">Copy &amp; Close</button>
+      </div>
+    `;
+    document.body.appendChild(modal);
   } catch(e) { toast(e.message, 'error'); }
 }
 
