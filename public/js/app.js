@@ -197,6 +197,16 @@ function navigate(page) {
     case 'admin-system': renderAdminSystem(); break;
     case 'admin-codes': renderAdminCodes(); break;
     case 'admin-install-bot': renderAdminInstallBot(); break;
+    case 'terminal': renderTerminal(); break;
+    case 'anomaly': renderAnomaly(); break;
+    case 'event-bus': renderEventBus(); break;
+    case 'plugins': renderPlugins(); break;
+    case 'vault': renderVault(); break;
+    case 'pipelines': renderPipelines(); break;
+    case 'status-pages': renderStatusPages(); break;
+    case 'quotas': renderQuotas(); break;
+    case 'rate-limiter': renderRateLimiter(); break;
+    case 'regions': renderRegions(); break;
     default: renderDashboard();
   }
 }
@@ -1578,6 +1588,320 @@ async function renderBackups() {
 async function createBackup(botId) { try { await api(`/api/backups/${botId}`, { method: 'POST', body: {} }); toast('Backup created!', 'success'); renderBackups(); } catch (e) { toast(e.message, 'error'); } }
 async function restoreBackup(botId, backupId) { if (!confirm('Restore this backup? Current files will be replaced.')) return; try { await api(`/api/backups/${botId}/restore/${backupId}`, { method: 'POST' }); toast('Backup restored!', 'success'); } catch (e) { toast(e.message, 'error'); } }
 async function rollbackVersion(botId, versionId) { if (!confirm('Rollback to this version?')) return; try { await api(`/api/versions/${botId}/rollback/${versionId}`, { method: 'POST' }); toast('Rolled back!', 'success'); renderBackups(); } catch (e) { toast(e.message, 'error'); } }
+
+
+// ─── V13: TERMINAL ───────────────────────────────────────────────────────────
+async function renderTerminal() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-2"><i class="ri-terminal-box-line mr-2"></i>Live Terminal</h2><p class="text-gray-400 text-sm mb-6">Execute commands in your bot's working directory in real-time.</p><div id="terminal-content"><p class="text-gray-400">Loading bots...</p></div></div>`;
+  try {
+    const botsData = await api('/api/bots');
+    const bots = (botsData.bots || []).filter(b => b.status === 'running');
+    if (bots.length === 0) {
+      document.getElementById('terminal-content').innerHTML = '<p class="text-gray-400">No running bots found. Start a bot to use the terminal.</p>';
+      return;
+    }
+    let html = `<div class="mb-4"><label class="text-sm text-gray-400 block mb-1">Select Bot</label><select id="terminal-bot-select" onchange="loadTerminalSession(this.value)" class="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white w-full max-w-sm">`;
+    for (const b of bots) html += `<option value="${b.id}">${b.name}</option>`;
+    html += `</select></div>`;
+    html += `<div class="glass rounded-xl overflow-hidden"><div class="bg-black/60 px-4 py-2 flex items-center gap-2 border-b border-white/10"><span class="w-3 h-3 rounded-full bg-red-500"></span><span class="w-3 h-3 rounded-full bg-yellow-500"></span><span class="w-3 h-3 rounded-full bg-green-500"></span><span class="text-xs text-gray-400 ml-2" id="terminal-bot-label">${bots[0].name}</span></div><div id="terminal-output" class="bg-black/80 font-mono text-sm text-green-400 p-4 h-80 overflow-y-auto whitespace-pre-wrap">Ready. Start a terminal session to begin.</div><div class="flex items-center gap-2 px-4 py-3 border-t border-white/10 bg-black/60"><span class="text-green-400 font-mono text-sm">$</span><input id="terminal-input" type="text" class="flex-1 bg-transparent text-white font-mono text-sm focus:outline-none" placeholder="Type a command..." onkeydown="if(event.key==='Enter') sendTerminalCommand()"><button onclick="sendTerminalCommand()" class="px-3 py-1 bg-green-500/20 text-green-400 rounded text-xs border border-green-500/30 hover:bg-green-500/30 transition">Run</button></div></div>`;
+    html += `<div class="flex gap-3 mt-4"><button onclick="startTerminalSession()" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm text-white transition"><i class="ri-play-line mr-1"></i>Start Session</button><button onclick="stopTerminalSession()" class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm text-gray-300 transition"><i class="ri-stop-line mr-1"></i>Stop</button></div>`;
+    document.getElementById('terminal-content').innerHTML = html;
+    window._terminalBotId = bots[0].id;
+  } catch (e) { document.getElementById('terminal-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+function loadTerminalSession(botId) { window._terminalBotId = botId; const sel = document.getElementById('terminal-bot-select'); if (sel) { const opt = sel.options[sel.selectedIndex]; const lbl = document.getElementById('terminal-bot-label'); if (lbl && opt) lbl.textContent = opt.text; } document.getElementById('terminal-output').textContent = 'Ready. Start a terminal session to begin.'; }
+async function startTerminalSession() { const botId = window._terminalBotId; if (!botId) return; try { await api(`/api/terminal/${botId}/start`, { method: 'POST' }); toast('Terminal session started', 'success'); appendTerminalOutput('Session started. Type commands below.\n'); } catch (e) { toast(e.message, 'error'); } }
+async function stopTerminalSession() { const botId = window._terminalBotId; if (!botId) return; try { await api(`/api/terminal/${botId}/stop`, { method: 'POST' }); toast('Terminal session stopped', 'info'); appendTerminalOutput('Session stopped.\n'); } catch (e) { toast(e.message, 'error'); } }
+async function sendTerminalCommand() { const botId = window._terminalBotId; const input = document.getElementById('terminal-input'); if (!botId || !input || !input.value.trim()) return; const cmd = input.value.trim(); input.value = ''; appendTerminalOutput(`$ ${cmd}\n`); try { const data = await api(`/api/terminal/${botId}/exec`, { method: 'POST', body: { command: cmd } }); appendTerminalOutput((data.output || '') + '\n'); } catch (e) { appendTerminalOutput(`Error: ${e.message}\n`); } }
+function appendTerminalOutput(text) { const out = document.getElementById('terminal-output'); if (out) { out.textContent += text; out.scrollTop = out.scrollHeight; } }
+
+// ─── V13: ANOMALY DETECTION ──────────────────────────────────────────────────
+async function renderAnomaly() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-2"><i class="ri-brain-line mr-2"></i>Anomaly Detection</h2><p class="text-gray-400 text-sm mb-6">AI-powered monitoring that flags unusual crash patterns, memory leaks, traffic spikes, and performance degradation.</p><div id="anomaly-content"><p class="text-gray-400">Loading...</p></div></div>`;
+  try {
+    const botsData = await api('/api/bots');
+    const bots = botsData.bots || [];
+    if (bots.length === 0) { document.getElementById('anomaly-content').innerHTML = '<p class="text-gray-400">No bots found.</p>'; return; }
+    let html = '';
+    for (const bot of bots) {
+      let summary = { alerts: [], metrics: {} };
+      try { summary = await api(`/api/anomaly/${bot.id}/summary`); } catch (_) {}
+      const alerts = summary.alerts || [];
+      const alertHtml = alerts.length > 0
+        ? alerts.slice(0, 5).map(a => `<div class="flex items-start gap-3 p-3 rounded-lg ${a.severity === 'high' ? 'bg-red-500/10 border border-red-500/20' : a.severity === 'medium' ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-blue-500/10 border border-blue-500/20'}"><i class="ri-alert-line ${a.severity === 'high' ? 'text-red-400' : a.severity === 'medium' ? 'text-yellow-400' : 'text-blue-400'} mt-0.5"></i><div><p class="text-sm text-white font-medium">${a.type}</p><p class="text-xs text-gray-400">${a.message}</p><p class="text-xs text-gray-500 mt-1">${new Date(a.detectedAt).toLocaleString()}</p></div><span class="ml-auto text-xs px-2 py-0.5 rounded ${a.resolved ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">${a.resolved ? 'Resolved' : 'Active'}</span></div>`).join('')
+        : '<p class="text-gray-500 text-sm">No anomalies detected.</p>';
+      html += `<div class="glass p-5 rounded-xl mb-4"><div class="flex items-center justify-between mb-4"><h3 class="text-white font-semibold">${bot.name}</h3><span class="text-xs px-2 py-1 rounded-full ${alerts.filter(a=>!a.resolved).length > 0 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}">${alerts.filter(a=>!a.resolved).length > 0 ? alerts.filter(a=>!a.resolved).length + ' active alerts' : 'Healthy'}</span></div><div class="space-y-2">${alertHtml}</div></div>`;
+    }
+    document.getElementById('anomaly-content').innerHTML = html;
+  } catch (e) { document.getElementById('anomaly-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+
+// ─── V13: EVENT BUS ──────────────────────────────────────────────────────────
+async function renderEventBus() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-2"><i class="ri-share-circle-line mr-2"></i>Event Bus</h2><p class="text-gray-400 text-sm mb-6">Pub/sub messaging — let your bots talk to each other across named channels.</p><div id="eventbus-content"><p class="text-gray-400">Loading channels...</p></div></div>`;
+  try {
+    const data = await api('/api/event-bus/channels');
+    const channels = data.channels || [];
+    let html = `<button onclick="showCreateChannelModal()" class="mb-6 px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm text-white transition"><i class="ri-add-line mr-1"></i>Create Channel</button>`;
+    if (channels.length === 0) {
+      html += '<p class="text-gray-400">No channels yet. Create one to start routing events between bots.</p>';
+    } else {
+      html += '<div class="space-y-3">' + channels.map(c => `<div class="glass p-4 rounded-xl flex items-center justify-between"><div><p class="text-white font-medium">${c.name}</p><p class="text-xs text-gray-400 mt-0.5">${c.description || 'No description'} · ${c.subscribers} subscribers · ${c.isPublic ? 'Public' : 'Private'}</p></div><div class="flex gap-2"><button onclick="publishEventBusMessage('${c.name}')" class="px-3 py-1.5 bg-brand-500/20 hover:bg-brand-500/30 text-brand-400 rounded text-xs border border-brand-500/30 transition">Publish</button>${c.owner ? `<button onclick="deleteChannel('${c.name}')" class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded text-xs border border-red-500/20 transition">Delete</button>` : ''}</div></div>`).join('') + '</div>';
+    }
+    document.getElementById('eventbus-content').innerHTML = html;
+  } catch (e) { document.getElementById('eventbus-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+function showCreateChannelModal() {
+  const name = prompt('Channel name (alphanumeric, dots, dashes, underscores):');
+  if (!name) return;
+  const desc = prompt('Description (optional):') || '';
+  const isPublic = confirm('Make this channel public?');
+  api('/api/event-bus/channels', { method: 'POST', body: { name, description: desc, isPublic } })
+    .then(() => { toast('Channel created!', 'success'); renderEventBus(); })
+    .catch(e => toast(e.message, 'error'));
+}
+async function publishEventBusMessage(channel) {
+  const msg = prompt(`Message to publish to #${channel} (JSON or plain text):`);
+  if (!msg) return;
+  let data = msg;
+  try { data = JSON.parse(msg); } catch (_) {}
+  api('/api/event-bus/channels/' + encodeURIComponent(channel) + '/publish', { method: 'POST', body: { data, from: 'dashboard' } })
+    .then(() => toast('Message published!', 'success'))
+    .catch(e => toast(e.message, 'error'));
+}
+async function deleteChannel(name) {
+  if (!confirm(`Delete channel "${name}"?`)) return;
+  api('/api/event-bus/channels/' + encodeURIComponent(name), { method: 'DELETE' })
+    .then(() => { toast('Channel deleted', 'info'); renderEventBus(); })
+    .catch(e => toast(e.message, 'error'));
+}
+
+// ─── V13: PLUGINS ────────────────────────────────────────────────────────────
+async function renderPlugins() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-2"><i class="ri-plug-line mr-2"></i>Plugins</h2><p class="text-gray-400 text-sm mb-6">Extend your bots with hot-reloadable plugins — no restart required.</p><div id="plugins-content"><p class="text-gray-400">Loading...</p></div></div>`;
+  try {
+    const botsData = await api('/api/bots');
+    const bots = botsData.bots || [];
+    const builtins = await api('/api/plugins/builtins');
+    const buildinList = builtins.plugins || [];
+    let html = '';
+    if (bots.length === 0) { document.getElementById('plugins-content').innerHTML = '<p class="text-gray-400">Deploy a bot first.</p>'; return; }
+    html += `<div class="mb-4"><label class="text-sm text-gray-400 block mb-1">Bot</label><select id="plugin-bot-select" onchange="loadBotPlugins(this.value)" class="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white w-full max-w-sm">`;
+    bots.forEach(b => { html += `<option value="${b.id}">${b.name}</option>`; });
+    html += `</select></div><div id="plugin-bot-content"><p class="text-gray-400">Select a bot above.</p></div>`;
+    html += `<h3 class="text-lg font-semibold text-white mt-8 mb-3">Available Plugins</h3><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">`;
+    buildinList.forEach(p => {
+      html += `<div class="glass p-4 rounded-xl"><p class="text-white font-semibold">${p.name}</p><p class="text-xs text-gray-400 mt-1 mb-3">${p.description}</p><span class="text-xs px-2 py-0.5 bg-brand-500/20 text-brand-400 rounded mr-2">${p.category}</span><button onclick="installPlugin('${p.id}')" class="mt-3 w-full px-3 py-1.5 bg-brand-600 hover:bg-brand-500 rounded text-xs text-white transition">Install</button></div>`;
+    });
+    html += '</div>';
+    document.getElementById('plugins-content').innerHTML = html;
+    if (bots.length > 0) loadBotPlugins(bots[0].id);
+  } catch (e) { document.getElementById('plugins-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+async function loadBotPlugins(botId) {
+  const container = document.getElementById('plugin-bot-content');
+  if (!container) return;
+  container.innerHTML = '<p class="text-gray-400 text-sm">Loading plugins...</p>';
+  try {
+    const data = await api(`/api/plugins/${botId}`);
+    const plugins = data.plugins || [];
+    if (plugins.length === 0) { container.innerHTML = '<p class="text-gray-400 text-sm">No plugins installed for this bot.</p>'; return; }
+    container.innerHTML = '<div class="space-y-2">' + plugins.map(p => `<div class="glass p-3 rounded-lg flex items-center justify-between"><div><p class="text-white text-sm font-medium">${p.name || p.plugin_id}</p><p class="text-xs text-gray-400">${p.status}</p></div><div class="flex gap-2"><button onclick="reloadPlugin('${botId}','${p.id}')" class="px-2 py-1 bg-yellow-500/10 text-yellow-400 rounded text-xs border border-yellow-500/20 hover:bg-yellow-500/20 transition">Reload</button><button onclick="uninstallPlugin('${botId}','${p.id}')" class="px-2 py-1 bg-red-500/10 text-red-400 rounded text-xs border border-red-500/20 hover:bg-red-500/20 transition">Remove</button></div></div>`).join('') + '</div>';
+  } catch (e) { container.innerHTML = `<p class="text-red-400 text-sm">${e.message}</p>`; }
+}
+function installPlugin(pluginId) { const sel = document.getElementById('plugin-bot-select'); if (!sel) { toast('Select a bot first', 'error'); return; } const botId = sel.value; api(`/api/plugins/${botId}/install`, { method: 'POST', body: { plugin_id: pluginId, config: {} } }).then(() => { toast('Plugin installed!', 'success'); loadBotPlugins(botId); }).catch(e => toast(e.message, 'error')); }
+function reloadPlugin(botId, pluginId) { api(`/api/plugins/${botId}/${pluginId}/reload`, { method: 'POST' }).then(() => { toast('Plugin reloaded!', 'success'); loadBotPlugins(botId); }).catch(e => toast(e.message, 'error')); }
+function uninstallPlugin(botId, pluginId) { if (!confirm('Remove this plugin?')) return; api(`/api/plugins/${botId}/${pluginId}`, { method: 'DELETE' }).then(() => { toast('Plugin removed', 'info'); loadBotPlugins(botId); }).catch(e => toast(e.message, 'error')); }
+
+// ─── V13: VAULT ──────────────────────────────────────────────────────────────
+async function renderVault() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-2"><i class="ri-lock-password-line mr-2"></i>Secret Vault</h2><p class="text-gray-400 text-sm mb-6">AES-256-GCM encrypted storage for bot secrets and environment variables.</p><div id="vault-content"><p class="text-gray-400">Loading secrets...</p></div></div>`;
+  try {
+    const data = await api('/api/vault');
+    const secrets = data.secrets || [];
+    let html = `<button onclick="showAddSecretModal()" class="mb-6 px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm text-white transition"><i class="ri-add-lock-line mr-1"></i>Add Secret</button>`;
+    if (secrets.length === 0) {
+      html += '<p class="text-gray-400">No secrets stored yet.</p>';
+    } else {
+      html += '<div class="space-y-3">' + secrets.map(s => `<div class="glass p-4 rounded-xl flex items-center justify-between"><div><div class="flex items-center gap-2"><i class="ri-key-2-line text-brand-400"></i><p class="text-white font-medium font-mono">${s.key_name}</p></div><p class="text-xs text-gray-400 mt-1">${s.description || ''} · ${s.category} · v${s.version} · accessed ${s.access_count}x</p>${s.expires_at ? `<p class="text-xs text-yellow-400 mt-0.5">Expires: ${new Date(s.expires_at).toLocaleDateString()}</p>` : ''}</div><div class="flex gap-2"><button onclick="rotateSecret('${s.id}')" class="px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 rounded text-xs border border-yellow-500/20 transition">Rotate</button><button onclick="deleteSecret('${s.id}')" class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded text-xs border border-red-500/20 transition">Delete</button></div></div>`).join('') + '</div>';
+    }
+    document.getElementById('vault-content').innerHTML = html;
+  } catch (e) { document.getElementById('vault-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+function showAddSecretModal() {
+  const key = prompt('Secret key name (e.g. API_KEY):');
+  if (!key) return;
+  const value = prompt('Secret value:');
+  if (value === null) return;
+  const desc = prompt('Description (optional):') || '';
+  api('/api/vault', { method: 'POST', body: { key_name: key, value, description: desc, category: 'general' } })
+    .then(() => { toast('Secret saved!', 'success'); renderVault(); })
+    .catch(e => toast(e.message, 'error'));
+}
+function rotateSecret(id) { const v = prompt('New secret value:'); if (v === null) return; api(`/api/vault/${id}/rotate`, { method: 'POST', body: { value: v } }).then(() => { toast('Secret rotated!', 'success'); renderVault(); }).catch(e => toast(e.message, 'error')); }
+function deleteSecret(id) { if (!confirm('Delete this secret?')) return; api(`/api/vault/${id}`, { method: 'DELETE' }).then(() => { toast('Secret deleted', 'info'); renderVault(); }).catch(e => toast(e.message, 'error')); }
+
+// ─── V13: PIPELINES ──────────────────────────────────────────────────────────
+async function renderPipelines() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-2"><i class="ri-git-branch-line mr-2"></i>CI/CD Pipelines</h2><p class="text-gray-400 text-sm mb-6">Automate your bot deployments — on push, run tests, build, deploy, and notify.</p><div id="pipelines-content"><p class="text-gray-400">Loading pipelines...</p></div></div>`;
+  try {
+    const data = await api('/api/pipelines');
+    const pipelines = data.pipelines || [];
+    const botsData = await api('/api/bots');
+    const botsMap = {};
+    (botsData.bots || []).forEach(b => { botsMap[b.id] = b.name; });
+    let html = `<button onclick="showCreatePipelineModal()" class="mb-6 px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm text-white transition"><i class="ri-add-line mr-1"></i>Create Pipeline</button>`;
+    if (pipelines.length === 0) {
+      html += '<p class="text-gray-400">No pipelines yet.</p>';
+    } else {
+      html += '<div class="space-y-3">' + pipelines.map(p => `<div class="glass p-4 rounded-xl"><div class="flex items-center justify-between mb-2"><div><p class="text-white font-medium">${p.name}</p><p class="text-xs text-gray-400">${botsMap[p.bot_id] || p.bot_id} · Trigger: ${p.trigger_type} · Runs: ${p.run_count}</p></div><div class="flex items-center gap-2"><span class="text-xs px-2 py-0.5 rounded-full ${p.last_status === 'success' ? 'bg-green-500/20 text-green-400' : p.last_status === 'failed' ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400'}">${p.last_status || 'never run'}</span><button onclick="triggerPipeline('${p.id}')" class="px-3 py-1.5 bg-brand-500/20 hover:bg-brand-500/30 text-brand-400 rounded text-xs border border-brand-500/30 transition"><i class="ri-play-line"></i> Run</button><button onclick="deletePipeline('${p.id}')" class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded text-xs border border-red-500/20 transition">Delete</button></div></div><div class="flex gap-2 flex-wrap">${(JSON.parse(p.steps || '[]')).map(s => `<span class="text-xs px-2 py-0.5 bg-white/5 text-gray-400 rounded">${s.type}</span>`).join('')}</div></div>`).join('') + '</div>';
+    }
+    document.getElementById('pipelines-content').innerHTML = html;
+  } catch (e) { document.getElementById('pipelines-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+async function showCreatePipelineModal() {
+  const botsData = await api('/api/bots').catch(() => ({ bots: [] }));
+  const bots = botsData.bots || [];
+  if (bots.length === 0) { toast('Deploy a bot first', 'error'); return; }
+  const botId = bots[0].id;
+  const name = prompt('Pipeline name:');
+  if (!name) return;
+  api('/api/pipelines', { method: 'POST', body: { bot_id: botId, name, trigger_type: 'manual', steps: [{ type: 'git_pull' }, { type: 'npm_install' }, { type: 'deploy' }] } })
+    .then(() => { toast('Pipeline created!', 'success'); renderPipelines(); })
+    .catch(e => toast(e.message, 'error'));
+}
+function triggerPipeline(id) { api(`/api/pipelines/${id}/trigger`, { method: 'POST' }).then(d => { toast(`Pipeline started (run ${d.run_id || ''})`, 'success'); setTimeout(renderPipelines, 1000); }).catch(e => toast(e.message, 'error')); }
+function deletePipeline(id) { if (!confirm('Delete this pipeline?')) return; api(`/api/pipelines/${id}`, { method: 'DELETE' }).then(() => { toast('Pipeline deleted', 'info'); renderPipelines(); }).catch(e => toast(e.message, 'error')); }
+
+// ─── V13: STATUS PAGES ───────────────────────────────────────────────────────
+async function renderStatusPages() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-2"><i class="ri-global-line mr-2"></i>Status Pages</h2><p class="text-gray-400 text-sm mb-6">Public uptime pages for your bots — think statuspage.io, built in.</p><div id="statuspages-content"><p class="text-gray-400">Loading...</p></div></div>`;
+  try {
+    const data = await api('/api/status-pages');
+    const pages = data.status_pages || [];
+    const botsData = await api('/api/bots');
+    const bots = (botsData.bots || []).filter(b => !pages.find(p => p.bot_id === b.id));
+    let html = '';
+    if (bots.length > 0) html += `<button onclick="showCreateStatusPageModal()" class="mb-6 px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm text-white transition"><i class="ri-add-line mr-1"></i>Create Status Page</button>`;
+    if (pages.length === 0) {
+      html += '<p class="text-gray-400">No status pages yet. Create one for a bot.</p>';
+    } else {
+      html += '<div class="space-y-3">' + pages.map(p => `<div class="glass p-4 rounded-xl flex items-center justify-between"><div><p class="text-white font-medium">${p.title}</p><p class="text-xs text-gray-400 mt-1">/status/${p.slug} · ${p.is_public ? 'Public' : 'Private'} · ${p.description || ''}</p></div><div class="flex gap-2"><a href="/status/${p.slug}" target="_blank" class="px-3 py-1.5 bg-brand-500/20 text-brand-400 rounded text-xs border border-brand-500/30 hover:bg-brand-500/30 transition">View</a><button onclick="deleteStatusPage('${p.id}')" class="px-3 py-1.5 bg-red-500/10 text-red-400 rounded text-xs border border-red-500/20 hover:bg-red-500/20 transition">Delete</button></div></div>`).join('') + '</div>';
+    }
+    document.getElementById('statuspages-content').innerHTML = html;
+  } catch (e) { document.getElementById('statuspages-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+async function showCreateStatusPageModal() {
+  const botsData = await api('/api/bots').catch(() => ({ bots: [] }));
+  const bots = botsData.bots || [];
+  if (bots.length === 0) { toast('Deploy a bot first', 'error'); return; }
+  const botChoices = bots.map((b, i) => `${i + 1}. ${b.name}`).join('\n');
+  const choice = prompt(`Choose bot:\n${botChoices}\nEnter number:`);
+  const bot = bots[parseInt(choice) - 1];
+  if (!bot) { toast('Invalid selection', 'error'); return; }
+  const title = prompt('Status page title:') || bot.name + ' Status';
+  const slug = prompt('Slug (URL path, e.g. my-bot):') || bot.name.toLowerCase().replace(/\s+/g, '-');
+  api('/api/status-pages', { method: 'POST', body: { bot_id: bot.id, title, slug, description: '', is_public: true } })
+    .then(() => { toast('Status page created!', 'success'); renderStatusPages(); })
+    .catch(e => toast(e.message, 'error'));
+}
+function deleteStatusPage(id) { if (!confirm('Delete this status page?')) return; api(`/api/status-pages/${id}`, { method: 'DELETE' }).then(() => { toast('Deleted', 'info'); renderStatusPages(); }).catch(e => toast(e.message, 'error')); }
+
+// ─── V13: QUOTAS ─────────────────────────────────────────────────────────────
+async function renderQuotas() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-2"><i class="ri-pie-chart-2-line mr-2"></i>Resource Quotas</h2><p class="text-gray-400 text-sm mb-6">Per-plan CPU, RAM, and storage limits with real-time usage metering.</p><div id="quotas-content"><p class="text-gray-400">Loading quotas...</p></div></div>`;
+  try {
+    const data = await api('/api/quotas/my');
+    const q = data.quotas || {};
+    const usage = data.usage || {};
+    function pct(used, limit) { if (!limit) return 0; return Math.min(100, Math.round((used / limit) * 100)); }
+    function bar(p) { const color = p > 85 ? 'bg-red-500' : p > 60 ? 'bg-yellow-500' : 'bg-brand-500'; return `<div class="w-full bg-white/10 rounded-full h-2"><div class="${color} h-2 rounded-full transition-all" style="width:${p}%"></div></div>`; }
+    const html = `
+      <div class="glass p-5 rounded-xl mb-4"><p class="text-xs text-gray-400 uppercase mb-1">Plan</p><p class="text-2xl font-bold text-white capitalize">${data.plan || 'free'}</p></div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">Bots</p><p class="text-xl font-bold text-white mb-2">${usage.bots || 0} / ${q.max_bots || '∞'}</p>${bar(pct(usage.bots, q.max_bots))}</div>
+        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">RAM</p><p class="text-xl font-bold text-white mb-2">${usage.ram_mb || 0} MB / ${q.max_ram_mb || '∞'} MB</p>${bar(pct(usage.ram_mb, q.max_ram_mb))}</div>
+        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">Storage</p><p class="text-xl font-bold text-white mb-2">${usage.storage_mb || 0} MB / ${q.max_storage_mb || '∞'} MB</p>${bar(pct(usage.storage_mb, q.max_storage_mb))}</div>
+        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">Team Members</p><p class="text-xl font-bold text-white mb-2">${usage.team_members || 0} / ${q.max_team_members || '∞'}</p>${bar(pct(usage.team_members, q.max_team_members))}</div>
+        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">Webhooks</p><p class="text-xl font-bold text-white mb-2">${usage.webhooks || 0} / ${q.max_webhooks || '∞'}</p>${bar(pct(usage.webhooks, q.max_webhooks))}</div>
+        <div class="glass p-4 rounded-xl"><p class="text-sm text-gray-400 mb-2">Schedulers</p><p class="text-xl font-bold text-white mb-2">${usage.schedulers || 0} / ${q.max_schedulers || '∞'}</p>${bar(pct(usage.schedulers, q.max_schedulers))}</div>
+      </div>`;
+    document.getElementById('quotas-content').innerHTML = html;
+  } catch (e) { document.getElementById('quotas-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+
+// ─── V13: RATE LIMITER ───────────────────────────────────────────────────────
+async function renderRateLimiter() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-2"><i class="ri-speed-line mr-2"></i>Rate Limiter</h2><p class="text-gray-400 text-sm mb-6">Per-bot rate limiting and DDoS protection — control message throughput per user.</p><div id="ratelimiter-content"><p class="text-gray-400">Loading...</p></div></div>`;
+  try {
+    const botsData = await api('/api/bots');
+    const bots = botsData.bots || [];
+    if (bots.length === 0) { document.getElementById('ratelimiter-content').innerHTML = '<p class="text-gray-400">Deploy a bot first.</p>'; return; }
+    let html = '';
+    for (const bot of bots) {
+      let config = { rules: [] };
+      try { config = await api(`/api/rate-limiter/${bot.id}`); } catch (_) {}
+      const rules = config.rules || [];
+      html += `<div class="glass p-5 rounded-xl mb-4"><div class="flex items-center justify-between mb-4"><h3 class="text-white font-semibold">${bot.name}</h3><button onclick="addRateLimitRule('${bot.id}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 rounded text-xs text-white transition"><i class="ri-add-line"></i> Add Rule</button></div>`;
+      if (rules.length === 0) {
+        html += '<p class="text-gray-500 text-sm">No rate limit rules set. Bot uses platform defaults.</p>';
+      } else {
+        html += '<div class="space-y-2">' + rules.map(r => `<div class="flex items-center justify-between p-3 rounded-lg bg-white/5"><div><p class="text-sm text-white">${r.action || 'message'} — max ${r.max_requests} / ${r.window_seconds}s</p><p class="text-xs text-gray-400">${r.scope || 'per-user'} · On exceed: ${r.on_exceed || 'block'}</p></div><button onclick="deleteRateLimitRule('${bot.id}','${r.id}')" class="text-red-400 hover:text-red-300 text-xs">Remove</button></div>`).join('') + '</div>';
+      }
+      html += '</div>';
+    }
+    document.getElementById('ratelimiter-content').innerHTML = html;
+  } catch (e) { document.getElementById('ratelimiter-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+function addRateLimitRule(botId) {
+  const maxReq = prompt('Max requests (e.g. 10):');
+  if (!maxReq) return;
+  const windowSec = prompt('Window in seconds (e.g. 60):') || '60';
+  const onExceed = prompt('Action on exceed (block / warn / slow):') || 'block';
+  api(`/api/rate-limiter/${botId}/rules`, { method: 'POST', body: { max_requests: parseInt(maxReq), window_seconds: parseInt(windowSec), scope: 'per-user', on_exceed: onExceed } })
+    .then(() => { toast('Rule added!', 'success'); renderRateLimiter(); })
+    .catch(e => toast(e.message, 'error'));
+}
+function deleteRateLimitRule(botId, ruleId) { if (!confirm('Remove this rule?')) return; api(`/api/rate-limiter/${botId}/rules/${ruleId}`, { method: 'DELETE' }).then(() => { toast('Rule removed', 'info'); renderRateLimiter(); }).catch(e => toast(e.message, 'error')); }
+
+// ─── V13: REGIONS ────────────────────────────────────────────────────────────
+async function renderRegions() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = `<div class="p-6"><h2 class="text-2xl font-bold text-white mb-2"><i class="ri-global-line mr-2"></i>Regions</h2><p class="text-gray-400 text-sm mb-6">Geo-distributed deployment — assign bots to edge regions for lower latency.</p><div id="regions-content"><p class="text-gray-400">Loading regions...</p></div></div>`;
+  try {
+    const data = await api('/api/regions');
+    const regions = data.regions || [];
+    const botsData = await api('/api/bots');
+    const bots = botsData.bots || [];
+    let html = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">`;
+    regions.forEach(r => {
+      html += `<div class="glass p-4 rounded-xl"><div class="flex items-center gap-3 mb-2"><span class="text-2xl">${r.flag || '🌐'}</span><div><p class="text-white font-medium">${r.name}</p><p class="text-xs text-gray-400">${r.location || r.id}</p></div></div><div class="flex items-center gap-2 mt-2"><span class="w-2 h-2 rounded-full ${r.status === 'online' ? 'bg-green-400' : 'bg-red-400'}"></span><span class="text-xs text-gray-400">${r.status}</span><span class="text-xs text-gray-500 ml-auto">${r.bots_count || 0} bots</span></div></div>`;
+    });
+    html += '</div>';
+    if (bots.length > 0) {
+      html += `<h3 class="text-lg font-semibold text-white mb-3">Assign Bot to Region</h3><div class="glass p-4 rounded-xl flex flex-wrap gap-3 items-end"><div><label class="text-xs text-gray-400 block mb-1">Bot</label><select id="region-bot-select" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm">${bots.map(b => `<option value="${b.id}">${b.name}</option>`).join('')}</select></div><div><label class="text-xs text-gray-400 block mb-1">Region</label><select id="region-select" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm">${regions.map(r => `<option value="${r.id}">${r.name}</option>`).join('')}</select></div><button onclick="assignBotRegion()" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm text-white transition">Assign</button></div>`;
+    }
+    document.getElementById('regions-content').innerHTML = html;
+  } catch (e) { document.getElementById('regions-content').innerHTML = `<p class="text-red-400">${e.message}</p>`; }
+}
+function assignBotRegion() {
+  const botId = document.getElementById('region-bot-select')?.value;
+  const regionId = document.getElementById('region-select')?.value;
+  if (!botId || !regionId) return;
+  api(`/api/regions/${regionId}/assign`, { method: 'POST', body: { bot_id: botId } })
+    .then(() => { toast('Bot assigned to region!', 'success'); renderRegions(); })
+    .catch(e => toast(e.message, 'error'));
+}
+
 
 // Wait for DOM before calling init so auth modal elements exist
 document.addEventListener('DOMContentLoaded', () => {
