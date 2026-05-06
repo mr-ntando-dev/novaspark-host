@@ -367,4 +367,63 @@ router.get('/:id/session-id', authenticate, (req, res) => {
   res.status(404).json({ error: 'No active session found. Bot must be connected (run + scanned QR) before you can export a session ID.' });
 });
 
+// ─── CLEAR SESSION (FIX 440) ─────────────────────────────────────────────────
+// Deletes all session files for a bot. Use this to fix error 440 (connectionReplaced).
+// After clearing, the bot will require a fresh QR scan on next start.
+router.delete('/:id/session', authenticate, (req, res) => {
+  const bot = Bots.findById(req.params.id);
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+  if (bot.owner_id !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  // Stop the bot first if running
+  try { stopBot(req.params.id); } catch (_) {}
+
+  const { BOTS_DIR } = require('../utils/bot-engine');
+  const botDir = path.join(BOTS_DIR, req.params.id);
+  const sessionDirs = [
+    bot.session_dir ? path.join(botDir, bot.session_dir) : null,
+    path.join(botDir, 'auth_info_baileys'),
+    path.join(botDir, 'session'),
+    path.join(botDir, '.session'),
+    path.join(botDir, 'auth'),
+    path.join(botDir, 'baileys_auth_info'),
+  ].filter(Boolean);
+
+  let cleared = 0;
+  for (const sessionDir of sessionDirs) {
+    if (fs.existsSync(sessionDir)) {
+      fs.rmSync(sessionDir, { recursive: true, force: true });
+      cleared++;
+    }
+  }
+
+  // Also remove the platform-level session backup
+  const SESSIONS_DIR = path.join(__dirname, '..', '..', 'data', 'sessions');
+  const sessionBackup = path.join(SESSIONS_DIR, `${req.params.id}.json`);
+  if (fs.existsSync(sessionBackup)) {
+    fs.unlinkSync(sessionBackup);
+    cleared++;
+  }
+
+  // Remove SESSION_ID from env vars so it doesn't restore the old session
+  try {
+    let envVars = JSON.parse(bot.env_vars || '{}');
+    if (envVars.SESSION_ID) {
+      delete envVars.SESSION_ID;
+      Bots.update(req.params.id, { env_vars: JSON.stringify(envVars) });
+    }
+  } catch (_) {}
+
+  BotLogs.add(req.params.id, 'info', 'Session cleared — bot will require fresh QR scan on next start');
+
+  res.json({
+    message: cleared > 0
+      ? 'Session files cleared. Start the bot again and scan the new QR code.'
+      : 'No session files found (already clean). Start the bot and scan QR.',
+    cleared_dirs: cleared
+  });
+});
+
 module.exports = router;

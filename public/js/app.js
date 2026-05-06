@@ -107,7 +107,8 @@ function connectWS() {
   ws = new WebSocket(`${proto}://${location.host}/ws`);
   ws.onopen = () => ws.send(JSON.stringify({ type: 'auth', userId: currentUser.id }));
   ws.onmessage = (e) => { try { const d = JSON.parse(e.data); handleWSMessage(d); } catch(_){} };
-  ws.onclose = () => setTimeout(connectWS, 5000);
+  ws.onerror = (e) => console.warn('WS connection error', e);
+  ws.onclose = (e) => { console.warn('WS closed (code:', e.code, ')'); setTimeout(connectWS, 5000); };
 }
 
 function handleWSMessage(data) {

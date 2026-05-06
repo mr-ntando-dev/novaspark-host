@@ -20,9 +20,18 @@ const processes = new Map(); // botId -> { proc, restartCount, lastRestart, back
 
 const BOT_WATCHDOG_INTERVAL = parseInt(process.env.BOT_WATCHDOG_INTERVAL_MS) || 120000;
 const BOT_MAX_RAM_MB = parseInt(process.env.BOT_MAX_RAM_MB) || 512;
-const BOT_RESTART_BACKOFF_BASE = 3000;
+const BOT_RESTART_BACKOFF_BASE = 15000; // 15s minimum — prevents 440 session collisions
 const BOT_RESTART_BACKOFF_MAX = 5 * 60 * 1000;
 const BOT_MAX_RESTARTS = 9999;
+
+// Fatal WhatsApp errors that should STOP auto-restart (restarting makes them worse)
+const FATAL_WA_PATTERNS = [
+  /440/,
+  /connectionReplaced/i,
+  /Stream Errored/i,
+  /loggedOut/i,
+  /Attempted to open a second protocol session/i,
+];
 
 // Noise patterns to suppress from WhatsApp/Baileys stderr
 // NOTE: do NOT add qr/QR here — we need to detect and forward those to the dashboard
@@ -612,6 +621,18 @@ function startBot(botId) {
       const raw = data.toString();
       const lines = raw.split('\n').filter(l => l.trim());
       for (const line of lines) {
+        // Detect fatal WhatsApp 440/connectionReplaced in stdout too
+        const isFatalWA = FATAL_WA_PATTERNS.some(p => p.test(line));
+        if (isFatalWA) {
+          BotLogs.add(botId, 'error', `[WA 440] Session conflict detected: ${line.slice(0, 300)}`);
+          BotLogs.add(botId, 'error', 'Another WhatsApp session is active on this number. Delete session files and re-scan QR to fix.');
+          broadcastBotStatus(bot.owner_id, botId, 'error_440', {
+            message: 'WhatsApp session conflict (440). Delete session and re-scan QR code.'
+          });
+          broadcastBotLog(bot.owner_id, botId, 'error', '[WA 440] Session replaced - delete session and re-scan QR');
+          record.restartCount = BOT_MAX_RESTARTS;
+          continue;
+        }
         // Detect base64 QR codes (Baileys outputs data:image/png;base64,... to stdout)
         if (line.includes('data:image/png;base64,')) {
           const match = line.match(/(data:image\/png;base64,[A-Za-z0-9+/=]+)/);
@@ -648,6 +669,19 @@ function startBot(botId) {
             broadcastBotQR(bot.owner_id, botId, match[1]);
             continue;
           }
+        }
+        // Detect fatal WhatsApp 440/connectionReplaced — stop auto-restart immediately
+        const isFatalWA = FATAL_WA_PATTERNS.some(p => p.test(line));
+        if (isFatalWA) {
+          BotLogs.add(botId, 'error', `[WA 440] Session conflict detected: ${line.slice(0, 300)}`);
+          BotLogs.add(botId, 'error', 'Another WhatsApp session is active on this number. Delete session files and re-scan QR to fix.');
+          broadcastBotStatus(bot.owner_id, botId, 'error_440', {
+            message: 'WhatsApp session conflict (440). Delete session and re-scan QR code.'
+          });
+          broadcastBotLog(bot.owner_id, botId, 'error', '[WA 440] Session replaced - delete session and re-scan QR');
+          // Disable auto-restart — restarting on 440 creates an infinite loop
+          record.restartCount = BOT_MAX_RESTARTS;
+          continue;
         }
         const isNoise = NOISE_PATTERNS.some(p => p.test(line));
         if (!isNoise) {
