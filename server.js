@@ -293,7 +293,7 @@ setInterval(() => {
     const heapUsedMB = Math.round(mem.heapUsed / 1024 / 1024);
     const rssMB = Math.round(mem.rss / 1024 / 1024);
 
-    if (rssMB > 350) {
+    if (rssMB > 470) {
       // Platform is using too much RAM — kill all running bots to survive
       console.error(chalk.red(`[Memory] CRITICAL: Platform RSS at ${rssMB}MB — killing all bots to prevent OOM`));
       const { processes: botProcesses, stopBot } = require('./src/utils/bot-engine');
@@ -307,7 +307,7 @@ setInterval(() => {
         } catch (_) {}
       }
       if (global.gc) global.gc();
-    } else if (heapUsedMB > 250) {
+    } else if (heapUsedMB > 380) {
       console.warn(chalk.yellow(`[Memory] High heap usage: ${heapUsedMB}MB — attempting GC`));
       if (global.gc) global.gc();
     }

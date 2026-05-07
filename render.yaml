@@ -1,9 +1,9 @@
 services:
   - type: web
-    name: novaspark-v11
+    name: novaspark-v13
     runtime: node
     buildCommand: npm install --production --omit=dev
-    startCommand: node --expose-gc --max-old-space-size=384 server.js
+    startCommand: node --expose-gc --max-old-space-size=450 server.js
     plan: free
     healthCheckPath: /api/health
     autoDeploy: true
@@ -11,7 +11,7 @@ services:
       - key: NODE_ENV
         value: production
       # IMPORTANT: Set RENDER_URL to your service URL after first deploy
-      # e.g. https://novaspark-v11.onrender.com
+      # e.g. https://novaspark-v13.onrender.com
       # This enables the keep-alive ping that prevents Render from spinning down
       - key: RENDER_URL
         sync: false
@@ -30,8 +30,8 @@ services:
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
       - key: BOT_MAX_RAM_MB
-        value: "128"
+        value: "350"
       - key: BOT_RAM_KILL_THRESHOLD_MB
-        value: "150"
+        value: "400"
       - key: MAX_BOTS_GLOBAL
         value: "100"
