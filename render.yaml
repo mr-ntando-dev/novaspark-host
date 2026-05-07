@@ -30,8 +30,8 @@ services:
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
       - key: BOT_MAX_RAM_MB
-        value: "350"
+        value: "1024"
       - key: BOT_RAM_KILL_THRESHOLD_MB
-        value: "400"
+        value: "1200"
       - key: MAX_BOTS_GLOBAL
         value: "100"
