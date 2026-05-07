@@ -535,26 +535,9 @@ const BOT_TEMPLATES = [
     default_prefix: '.'
   },
   {
-    id: 'subzero',
-    name: 'Subzero MD',
-    description: 'World Best WhatsApp Bot - Made in Zimbabwe by Mr Frank',
-    repo: 'https://github.com/subzero-md/SUBZERO-DM',
-    branch: 'main',
-    entry: 'index.js',
-    icon: '🧊',
-    color: 'from-cyan-500 to-blue-500',
-    env_keys: ['SESSION_ID', 'OWNER_NUMBER', 'PREFIX'],
-    session_key: 'SESSION_ID',
-    owner_key: 'OWNER_NUMBER',
-    prefix_key: 'PREFIX',
-    default_prefix: '.',
-    config_file: 'settings.js',
-    config_format: 'module.exports'
-  },
-  {
     id: 'levanter',
     name: 'Levanter',
-    description: 'Feature-rich WhatsApp bot supporting multiple sessions',
+    description: 'Feature-rich WhatsApp bot with multi-session support — actively maintained 2026',
     repo: 'https://github.com/lyfe00011/levanter',
     branch: 'master',
     entry: 'index.js',
@@ -569,7 +552,7 @@ const BOT_TEMPLATES = [
   {
     id: 'silva-md',
     name: 'Silva MD Bot',
-    description: 'Smart WhatsApp bot - motivation, media downloads, polls',
+    description: 'Smart WhatsApp bot — media downloads, AI replies, polls — updated May 2026',
     repo: 'https://github.com/SilvaTechB/silva-md-bot',
     branch: 'main',
     entry: 'silva.js',
@@ -584,7 +567,7 @@ const BOT_TEMPLATES = [
   {
     id: 'queen-anya',
     name: 'Queen Anya v3',
-    description: 'Modular WhatsApp plugins bot powered by Baileys',
+    description: 'Modular WhatsApp plugin bot powered by Baileys — updated April 2026',
     repo: 'https://github.com/PikaBotz/AnyaBotV3',
     branch: 'proto',
     entry: 'index.js',
@@ -599,7 +582,7 @@ const BOT_TEMPLATES = [
   {
     id: 'chatunity',
     name: 'ChatUnity Bot',
-    description: 'Multilingual WhatsApp bot - ranked among the best globally',
+    description: 'Multilingual WhatsApp bot — 50+ languages, group tools — updated April 2026',
     repo: 'https://github.com/chatunitycenter/chatunity-bot',
     branch: 'main',
     entry: 'main.js',
@@ -610,6 +593,23 @@ const BOT_TEMPLATES = [
     owner_key: 'OWNER_NUMBER',
     prefix_key: 'PREFIX',
     default_prefix: '.'
+  },
+  {
+    id: 'subzero',
+    name: 'Subzero MD',
+    description: 'Full-featured WhatsApp bot by Mr Frank — stickers, AI, games — updated March 2026',
+    repo: 'https://github.com/subzero-md/SUBZERO-DM',
+    branch: 'main',
+    entry: 'index.js',
+    icon: '🧊',
+    color: 'from-cyan-500 to-blue-500',
+    env_keys: ['SESSION_ID', 'OWNER_NUMBER', 'PREFIX'],
+    session_key: 'SESSION_ID',
+    owner_key: 'OWNER_NUMBER',
+    prefix_key: 'PREFIX',
+    default_prefix: '.',
+    config_file: 'settings.js',
+    config_format: 'module.exports'
   }
 ];
 
