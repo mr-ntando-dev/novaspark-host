@@ -19,7 +19,8 @@ const zlib = require('zlib');
 const { execSync } = require('child_process');
 const { getDb, Bots, BotLogs } = require('../database');
 
-const BOTS_DIR = path.join(__dirname, '..', '..', 'data', 'bots');
+const DATA_ROOT = process.env.DATA_DIR || path.join(__dirname, '..', '..', 'data');
+const BOTS_DIR = path.join(DATA_ROOT, 'bots');
 const DISK_USAGE_THRESHOLD = 0.80; // 80% — start cleaning
 const DISK_CRITICAL_THRESHOLD = 0.92; // 92% — force-evict everything stopped
 

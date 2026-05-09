@@ -18,7 +18,8 @@ const {
   runDiskWatchdog
 } = require('./storage-manager');
 
-const BOTS_DIR = path.join(__dirname, '..', '..', 'data', 'bots');
+const DATA_ROOT = process.env.DATA_DIR || path.join(__dirname, '..', '..', 'data');
+const BOTS_DIR = path.join(DATA_ROOT, 'bots');
 if (!fs.existsSync(BOTS_DIR)) fs.mkdirSync(BOTS_DIR, { recursive: true });
 
 // ─── MALICIOUS / FAKE PACKAGES ────────────────────────────────────────────────
@@ -285,25 +286,42 @@ function applyBotConfig(botId, botDir) {
  * Clone a bot repository
  */
 function cloneRepo(botId, repoUrl, branch = 'main') {
+  // Inject GitHub token into URL if available (supports private repos)
+  let cloneUrl = repoUrl;
+  const ghToken = process.env.GITHUB_TOKEN;
+  if (ghToken && /github\.com/i.test(repoUrl)) {
+    cloneUrl = repoUrl.replace(/^https?:\/\//, `https://${ghToken}@`);
+  }
+
   const botDir = path.join(BOTS_DIR, botId);
   if (fs.existsSync(botDir)) {
-    // Pull latest
+    // Fetch + reset to remote branch — avoids pull failures from branch mismatch or dirty state
     try {
-      execSync(`cd "${botDir}" && git pull origin ${branch}`, { timeout: 60000, stdio: 'pipe' });
-      BotLogs.add(botId, 'info', `Pulled latest from ${branch}`);
+      execSync(`cd "${botDir}" && git fetch --depth 1 origin ${branch} && git checkout -B ${branch} FETCH_HEAD`, {
+        timeout: 90000,
+        stdio: 'pipe'
+      });
+      BotLogs.add(botId, 'info', `Updated to latest commit on ${branch}`);
     } catch (e) {
-      BotLogs.add(botId, 'warn', `Git pull failed, re-cloning: ${e.message}`);
+      BotLogs.add(botId, 'warn', `Git update failed, re-cloning: ${e.stderr ? e.stderr.toString().slice(0, 200) : e.message}`);
       fs.rmSync(botDir, { recursive: true, force: true });
     }
   }
 
   if (!fs.existsSync(botDir)) {
     try {
-      execSync(`git clone --depth 1 --branch ${branch} "${repoUrl}" "${botDir}"`, { timeout: 120000, stdio: 'pipe' });
+      execSync(`git clone --depth 1 --branch ${branch} "${cloneUrl}" "${botDir}"`, { timeout: 180000, stdio: 'pipe' });
       BotLogs.add(botId, 'info', `Cloned ${repoUrl} (${branch})`);
     } catch (e) {
-      BotLogs.add(botId, 'error', `Clone failed: ${e.message}`);
-      throw new Error(`Failed to clone repository: ${e.message}`);
+      // Retry without --branch (handles repos that use 'master' but user typed 'main' or vice versa)
+      BotLogs.add(botId, 'warn', `Clone with branch "${branch}" failed, retrying without branch flag...`);
+      try {
+        execSync(`git clone --depth 1 "${cloneUrl}" "${botDir}"`, { timeout: 180000, stdio: 'pipe' });
+        BotLogs.add(botId, 'info', `Cloned ${repoUrl} (default branch)`);
+      } catch (e2) {
+        BotLogs.add(botId, 'error', `Clone failed: ${e2.stderr ? e2.stderr.toString().slice(0, 300) : e2.message}`);
+        throw new Error(`Failed to clone repository. Check the URL and ensure the repo is public (or set GITHUB_TOKEN for private repos).`);
+      }
     }
   }
 
@@ -321,10 +339,11 @@ function cloneRepo(botId, repoUrl, branch = 'main') {
   if (fs.existsSync(pkgPath)) {
     const yarnLock = path.join(botDir, 'yarn.lock');
 
-    // Force git to use HTTPS instead of SSH (many bot deps reference private GitHub repos via SSH)
+    // Force git to use HTTPS instead of SSH (many bot deps reference GitHub repos via SSH)
     try {
-      execSync('git config --global url."https://github.com/".insteadOf ssh://git@github.com/', { timeout: 5000, stdio: 'pipe' });
-      execSync('git config --global url."https://github.com/".insteadOf git@github.com:', { timeout: 5000, stdio: 'pipe' });
+      execSync('git config --global url."https://github.com/".insteadOf "git@github.com:"', { timeout: 5000, stdio: 'pipe' });
+      execSync('git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"', { timeout: 5000, stdio: 'pipe' });
+      execSync('git config --global url."https://github.com/".insteadOf "git://github.com/"', { timeout: 5000, stdio: 'pipe' });
     } catch (_) {}
 
     // Patch known broken/dead git dependencies before npm install
@@ -490,7 +509,7 @@ function writeConfigFiles(botId, botDir, bot) {
  * Session persistence helpers — backup and restore WhatsApp auth session folders.
  * Many bots use auth_info_baileys/, session/, .session/, or a custom folder.
  */
-const SESSIONS_DIR = path.join(__dirname, '..', '..', 'data', 'sessions');
+const SESSIONS_DIR = path.join(DATA_ROOT, 'sessions');
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
 
 function getSessionDir(bot, botDir) {

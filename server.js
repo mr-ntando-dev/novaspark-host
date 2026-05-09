@@ -393,7 +393,8 @@ server.listen(PORT, async () => {
     try {
       const si = require('systeminformation');
       const running = getRunningBots();
-      for (const botId of running) {
+      for (const entry of running) {
+        const botId = typeof entry === 'object' ? entry.botId : entry;
         const bot = Bots.findById(botId);
         if (bot) {
           si.currentLoad().then(cpu => {

@@ -164,16 +164,20 @@ router.post('/:id/deploy', authenticate, async (req, res) => {
   // Run the heavy clone/install/start work in the background
   setImmediate(async () => {
     try {
+      // Step 1: Clone / pull repo + install dependencies
+      BotLogs.add(req.params.id, 'info', `Cloning ${bot.repo_url} (branch: ${bot.branch || 'main'})...`);
       cloneRepo(req.params.id, bot.repo_url, bot.branch || 'main');
-      BotLogs.add(req.params.id, 'info', 'Dependencies installed, starting bot...');
+      BotLogs.add(req.params.id, 'info', 'Repository ready. Starting bot process...');
 
+      // Step 2: Start the bot (cloneRepo already installed deps — startBot won't re-clone)
       const result = startBot(req.params.id);
-      Notifications.create(bot.owner_id, 'success', 'Bot Deployed', `${bot.name} was deployed successfully.`);
-      BotLogs.add(req.params.id, 'info', 'Bot started successfully.');
+      Notifications.create(bot.owner_id, 'success', 'Bot Deployed', `${bot.name} deployed and started successfully.`);
+      BotLogs.add(req.params.id, 'info', `Bot started (PID: ${result.pid}).`);
     } catch (e) {
       Bots.update(req.params.id, { status: 'failed' });
-      BotLogs.add(req.params.id, 'error', `Deploy failed: ${e.message}`);
-      Notifications.create(bot.owner_id, 'error', 'Deploy Failed', `${bot.name} failed to deploy: ${e.message.slice(0, 150)}`);
+      const msg = e.message || String(e);
+      BotLogs.add(req.params.id, 'error', `Deploy failed: ${msg}`);
+      Notifications.create(bot.owner_id, 'error', 'Deploy Failed', `${bot.name}: ${msg.slice(0, 150)}`);
     }
   });
 });
