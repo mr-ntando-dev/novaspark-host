@@ -1,0 +1,222 @@
+{
+  "_comment": "DO NOT EDIT: this file was generated automatically by NovaSpark for Pterodactyl Panel import.",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2025-01-01T00:00:00+00:00",
+  "name": "NovaSpark V13",
+  "author": "mr-ntando-dev",
+  "description": "NovaSpark V13 — Advanced WhatsApp/Discord Bot Hosting Platform with Live Terminal, AI Anomaly Detection, Event Bus, Plugin System, Secret Vault, CI/CD Pipelines, Status Pages, Resource Quotas, Rate Limiter, and Geo Regions.",
+  "features": null,
+  "docker_images": {
+    "ghcr.io/parkervcp/yolks:nodejs_22": "ghcr.io/parkervcp/yolks:nodejs_22"
+  },
+  "file_denylist": [],
+  "startup": "bash entrypoint.sh",
+  "config": {
+    "files": "{}",
+    "startup": "{\"done\": \"All systems nominal. Ready to host bots.\"}",
+    "logs": "{}",
+    "stop": "^C"
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/bin/bash\n# NovaSpark V13 — Pterodactyl Install Script\nset -e\n\napt-get update -y\napt-get install -y git curl\n\n# Install Node.js 22 if not present\nif ! command -v node &>/dev/null || [[ \"$(node -v)\" != v22* ]]; then\n  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -\n  apt-get install -y nodejs\nfi\n\ncd /mnt/user-data/volumes/${P_SERVER_UUID}\n\n# Clone or update repo\nif [ -d \".git\" ]; then\n  echo \"[install] Updating existing repo…\"\n  git pull\nelse\n  echo \"[install] Cloning NovaSpark V13…\"\n  git clone https://github.com/mr-ntando-dev/novaspark-host.git .\nfi\n\n# Create required directories\nmkdir -p data/bots data/sessions data/backups\n\n# Copy .env if missing\nif [ ! -f .env ] && [ -f .env.example ]; then\n  cp .env.example .env\nfi\n\n# Make entrypoint executable\nchmod +x entrypoint.sh\n\necho \"[install] NovaSpark V13 installed successfully.\"\n",
+      "container": "ghcr.io/parkervcp/yolks:nodejs_22",
+      "entrypoint": "bash"
+    }
+  },
+  "variables": [
+    {
+      "name": "App URL",
+      "description": "Public URL of this NovaSpark instance (e.g. http://123.456.789.0:3000). Used for keep-alive pings and referral links.",
+      "env_variable": "APP_URL",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Server Port",
+      "description": "Port NovaSpark listens on. Must match the port allocated in the panel.",
+      "env_variable": "PORT",
+      "default_value": "3000",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric|between:1024,65535",
+      "field_type": "text"
+    },
+    {
+      "name": "Node Environment",
+      "description": "Set to 'production' for live servers.",
+      "env_variable": "NODE_ENV",
+      "default_value": "production",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|in:production,development",
+      "field_type": "text"
+    },
+    {
+      "name": "Admin Username",
+      "description": "Username for the default admin account created on first boot.",
+      "env_variable": "ADMIN_USERNAME",
+      "default_value": "admin",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|min:3|max:32",
+      "field_type": "text"
+    },
+    {
+      "name": "Admin Password",
+      "description": "Password for the default admin account. Change this before going live!",
+      "env_variable": "ADMIN_PASSWORD",
+      "default_value": "ChangeMe123!",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|min:8",
+      "field_type": "text"
+    },
+    {
+      "name": "JWT Secret",
+      "description": "Secret key for signing JWT access tokens. Use a long random string (32+ chars).",
+      "env_variable": "JWT_SECRET",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": false,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "JWT Refresh Secret",
+      "description": "Secret key for signing JWT refresh tokens. Must differ from JWT_SECRET.",
+      "env_variable": "JWT_REFRESH_SECRET",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": false,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Vault Encryption Key",
+      "description": "AES-256 key for the Secret Vault. 32+ chars recommended. Falls back to JWT_SECRET if not set.",
+      "env_variable": "VAULT_ENCRYPTION_KEY",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": false,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Max RAM per Bot (MB)",
+      "description": "Maximum RAM a single bot process is allowed before being killed.",
+      "env_variable": "BOT_MAX_RAM_MB",
+      "default_value": "512",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric|min:128",
+      "field_type": "text"
+    },
+    {
+      "name": "Bot RAM Kill Threshold (MB)",
+      "description": "Force-kill a bot if it exceeds this RAM usage. Should be > BOT_MAX_RAM_MB.",
+      "env_variable": "BOT_RAM_KILL_THRESHOLD_MB",
+      "default_value": "700",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric|min:128",
+      "field_type": "text"
+    },
+    {
+      "name": "Max Bots (Global)",
+      "description": "Maximum number of bots allowed across all users on this instance.",
+      "env_variable": "MAX_BOTS_GLOBAL",
+      "default_value": "100",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric|min:1",
+      "field_type": "text"
+    },
+    {
+      "name": "Discord Webhook URL",
+      "description": "(Optional) Discord webhook for crash/alert notifications.",
+      "env_variable": "DISCORD_WEBHOOK_URL",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "GitHub Token",
+      "description": "(Optional) GitHub personal access token for cloning private bot repos.",
+      "env_variable": "GITHUB_TOKEN",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Anomaly Detection Sensitivity",
+      "description": "How sensitive AI anomaly detection is (1 = least, 10 = most). Default: 5.",
+      "env_variable": "ANOMALY_SENSITIVITY",
+      "default_value": "5",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric|between:1,10",
+      "field_type": "text"
+    },
+    {
+      "name": "Default Region",
+      "description": "Default deploy region for new bots (e.g. us-east-1, eu-frankfurt, af-johannesburg).",
+      "env_variable": "DEFAULT_REGION",
+      "default_value": "us-east-1",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Max Old Space (MB)",
+      "description": "Node.js --max-old-space-size value. Set to ~80% of your container's total RAM.",
+      "env_variable": "MAX_OLD_SPACE_MB",
+      "default_value": "512",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric|min:256",
+      "field_type": "text"
+    },
+    {
+      "name": "Stripe Secret Key",
+      "description": "(Optional) Stripe secret key for billing/subscription features.",
+      "env_variable": "STRIPE_SECRET_KEY",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Stripe Webhook Secret",
+      "description": "(Optional) Stripe webhook signing secret.",
+      "env_variable": "STRIPE_WEBHOOK_SECRET",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "CI/CD Pipeline Webhook Secret",
+      "description": "(Optional) Secret for validating GitHub/GitLab CI/CD webhook payloads.",
+      "env_variable": "PIPELINE_WEBHOOK_SECRET",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    }
+  ]
+}

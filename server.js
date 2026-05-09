@@ -51,7 +51,7 @@ const regionsRoutes = require('./src/routes/regions');
 // CONFIG
 // ─────────────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-const RENDER_URL = process.env.RENDER_URL || '';
+const RENDER_URL = process.env.APP_URL || process.env.RENDER_URL || '';
 const PING_INTERVAL_MS = 14 * 60 * 1000;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -243,7 +243,7 @@ async function bootstrapAdmin() {
 // CRON JOBS
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Keep-alive ping (prevents Render free tier spin-down)
+// Keep-alive ping (prevents free-tier spin-down on Render / Railway / etc.)
 if (RENDER_URL) {
   setInterval(async () => {
     try {

@@ -183,7 +183,8 @@ function getStorageStats(botId) {
  */
 function getDiskUsage() {
   try {
-    const output = execSync("df -B1 /opt/render/project/src/data 2>/dev/null || df -B1 / 2>/dev/null | tail -1", {
+    const dataPath = process.env.DATA_DIR || path.join(__dirname, '..', '..', 'data');
+    const output = execSync(`df -B1 "${dataPath}" 2>/dev/null || df -B1 / 2>/dev/null | tail -1`, {
       encoding: 'utf8',
       timeout: 5000
     }).trim();

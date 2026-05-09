@@ -15,7 +15,7 @@ const { Alerts } = require('../utils/discord-alerts');
 const router = Router();
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-const PLATFORM_DOMAIN = process.env.RENDER_URL || 'https://nvs-host.spcfy.eu';
+const PLATFORM_DOMAIN = process.env.APP_URL || process.env.RENDER_URL || 'http://localhost:3000';
 
 // ─── DB MIGRATION: add email verification columns ────────────────────────────
 function ensureVerificationColumns() {
